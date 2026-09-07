@@ -1,821 +1,196 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Image,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS, RADII } from '../theme/tokens';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Image, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, AppState } from 'react-native';
+import { CAT, STEP, configFor, createWorld, jump, resizeWorld, tick } from '../game/engine.mjs';
 
-const KURO_RUN_SHEET = require('../../assets/kuro/kuro-run.png');
-const SANTIAGO_SKYLINE = require('../../assets/kuro/santiago-skyline.png');
-const ROOFTOP_SEGMENTS = require('../../assets/kuro/rooftop-segments.png');
+const CAT_SHEET = require('../../assets/kuro/kuro-run.png');
+const SKYLINE = require('../../assets/kuro/santiago-skyline.png');
+const ROOFS = require('../../assets/kuro/rooftop-segments.png');
+const PIXELS = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : {};
+const SKY_STARS = Array.from({ length: 36 }, (_, i) => ({ x: (i * 137.3) % 1000, y: 25 + (i * 47 % 180), size: i % 4 === 0 ? 2 : 1 }));
 
-const BOARD_WIDTH = 310;
-const BOARD_HEIGHT = 245;
-const GROUND_Y = 174;
-const KURO_WIDTH = 74;
-const KURO_HEIGHT = 54;
-const KURO_X = 48;
-const GRAVITY = 0.5;
-const JUMP_FORCE = -9.4;
-const MAX_JUMPS = 2;
-const MAX_FRAMES = 1800;
-const OBSTACLES_ENABLED = false;
-
-const SPRITE_FRAME_COUNT = 4;
-const SPRITE_FRAME_WIDTH = 74;
-const SPRITE_SHEET_WIDTH = SPRITE_FRAME_WIDTH * SPRITE_FRAME_COUNT;
-const RUN_FRAME_TICKS = 4;
-const SKYLINE_WIDTH = 390;
-const SKYLINE_HEIGHT = 76;
-const ROOFTOP_FRAME_COUNT = 4;
-const ROOFTOP_FRAME_WIDTH = 248;
-const ROOFTOP_IMAGE_HEIGHT = 140;
-const ROOFTOP_HEIGHT = 152;
-const ROOFTOP_STEP = 198;
-const ROOFTOP_SHEET_WIDTH = ROOFTOP_FRAME_WIDTH * ROOFTOP_FRAME_COUNT;
-const WEB_PIXEL_STYLE = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : null;
-
-const PIXEL_EMPTY = '.';
-const PIXEL_COLORS = {
-  g: '#ffe08a',
-  y: '#f4b75f',
-  p: '#edd6ff',
-};
-
-const STAR_FRAMES = [
-  ['..g..', '.ggg.', 'ggggg', '.ggg.', '..g..'],
-  ['.....', '..g..', '.gyg.', '..g..', '.....'],
-];
-
-const INITIAL_WORLD = {
-  status: 'start',
-  frame: 0,
-  distance: 0,
-  stars: 0,
-  kuroY: GROUND_Y - KURO_HEIGHT,
-  velocityY: 0,
-  jumpsUsed: 0,
-  obstacles: [],
-  collectibles: [],
-};
-
-function makeObstacle(id, frame) {
-  const gap = id > 1 && frame % 4 === 0;
-  return {
-    id: `obstacle-${id}`,
-    type: gap ? 'gap' : 'chimney',
-    x: BOARD_WIDTH + 86,
-    width: gap ? 48 : 22,
-    height: gap ? 60 : 32 + (id % 2) * 8,
-  };
-}
-
-function makeStar(id) {
-  return {
-    id: `star-${id}`,
-    x: BOARD_WIDTH + 44,
-    y: 78 + ((id * 31) % 48),
-    collected: false,
-  };
-}
-
-function rangesOverlap(aStart, aEnd, bStart, bEnd) {
-  return aStart < bEnd && aEnd > bStart;
-}
-
-function hasCollision(kuroY, obstacle) {
-  const kuroLeft = KURO_X + 17;
-  const kuroRight = KURO_X + KURO_WIDTH - 12;
-  const obstacleLeft = obstacle.x;
-  const obstacleRight = obstacle.x + obstacle.width;
-
-  if (!rangesOverlap(kuroLeft, kuroRight, obstacleLeft, obstacleRight)) return false;
-
-  if (obstacle.type === 'gap') {
-    return kuroY + KURO_HEIGHT >= GROUND_Y - 1;
-  }
-
-  const chimneyTop = GROUND_Y - obstacle.height;
-  return kuroY + KURO_HEIGHT >= chimneyTop + 7;
-}
-
-function canCollectStar(kuroY, star) {
-  const kuroLeft = KURO_X + 8;
-  const kuroRight = KURO_X + KURO_WIDTH - 4;
-  const kuroTop = kuroY + 2;
-  const kuroBottom = kuroY + KURO_HEIGHT - 2;
+function Building({ roof, height }) {
+  // The source artwork has unevenly spaced buildings. Crop the flat tile roof
+  // by its actual pixel rectangle instead of dividing the sheet into quarters.
+  const sx = roof.width / 362;
+  const sy = 154 / 255;
   return (
-    rangesOverlap(kuroLeft, kuroRight, star.x, star.x + 22) &&
-    rangesOverlap(kuroTop, kuroBottom, star.y, star.y + 22)
-  );
-}
-
-function PixelSprite({ pixels, cell = 4, style }) {
-  return (
-    <View style={[styles.pixelSprite, { width: pixels[0].length * cell, height: pixels.length * cell }, style]}>
-      {pixels.map((row, y) => row.split('').map((token, x) => (
-        token === PIXEL_EMPTY ? null : (
-          <View
-            key={`${x}-${y}`}
-            style={[
-              styles.pixelBlock,
-              {
-                left: x * cell,
-                top: y * cell,
-                width: cell,
-                height: cell,
-                backgroundColor: PIXEL_COLORS[token] || token,
-              },
-            ]}
-          />
-        )
-      )))}
+    <View testID={`roof-${roof.id}`} style={[styles.building, { left: roof.x, top: roof.y, width: roof.width, height: height - roof.y + 50 }]}>
+      <View style={styles.facade} />
+      <View style={{ height: 154, overflow: 'hidden' }}>
+        <Image source={ROOFS} resizeMode="stretch" style={[PIXELS, { position: 'absolute', width: 2172 * sx, height: 546 * sy, left: -1755 * sx, top: -283 * sy }]} />
+      </View>
+      <View style={styles.roofEdge} />
+      <View style={styles.roofShadow} />
     </View>
   );
 }
 
-function PixelStar({ star, frame }) {
-  if (star.collected) return null;
-
-  return (
-    <View style={[styles.collectibleStar, { left: star.x, top: star.y }]}>
-      <PixelSprite pixels={STAR_FRAMES[Math.floor(frame / 8) % STAR_FRAMES.length]} cell={4} />
-    </View>
-  );
-}
-
-function Moon() {
-  return (
-    <View style={styles.moon}>
-      <View style={styles.moonCraterOne} />
-      <View style={styles.moonCraterTwo} />
-    </View>
-  );
-}
-
-function BackgroundStars({ frame }) {
-  const stars = [
-    { left: 32, top: 34, size: 3, slow: 0.16 },
-    { left: 88, top: 74, size: 2, slow: 0.12 },
-    { left: 132, top: 42, size: 3, slow: 0.14 },
-    { left: 215, top: 68, size: 2, slow: 0.1 },
-    { left: 270, top: 34, size: 3, slow: 0.18 },
-  ];
-
-  return stars.map((star, index) => (
-    <View
-      key={index}
-      style={[
-        styles.skyStar,
-        {
-          left: (star.left - frame * star.slow + BOARD_WIDTH) % BOARD_WIDTH,
-          top: star.top,
-          width: star.size,
-          height: star.size,
-          opacity: Math.floor(frame / 18 + index) % 2 ? 0.5 : 0.9,
-        },
-      ]}
-    />
-  ));
-}
-
-function SantiagoSkyline({ frame }) {
-  const offset = -(frame * 0.28) % SKYLINE_WIDTH;
-
-  return (
-    <View style={styles.skylineLayer} pointerEvents="none">
-      {Array.from({ length: 3 }).map((_, index) => (
-        <Image
-          key={index}
-          source={SANTIAGO_SKYLINE}
-          resizeMode="stretch"
-          style={[
-            styles.skylineImage,
-            WEB_PIXEL_STYLE,
-            { left: offset + index * SKYLINE_WIDTH },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
-function RooftopSegment({ left, variant }) {
-  return (
-    <View style={[styles.rooftopSegment, { left }]} pointerEvents="none">
-      <View style={styles.rooftopFacadeFill} />
-      <Image
-        source={ROOFTOP_SEGMENTS}
-        resizeMode="stretch"
-        style={[
-          styles.rooftopSheet,
-          WEB_PIXEL_STYLE,
-          { left: -variant * ROOFTOP_FRAME_WIDTH },
-        ]}
-      />
-    </View>
-  );
-}
-
-function RooftopLayer({ frame }) {
-  const scroll = frame * 1.1;
-  const firstTile = Math.floor(scroll / ROOFTOP_STEP);
-  const offset = -(scroll % ROOFTOP_STEP);
-
-  return (
-    <View style={styles.rooftopLayer} pointerEvents="none">
-      <View style={styles.rooftopBaseFill} />
-      {Array.from({ length: 4 }).map((_, index) => {
-        const tileIndex = firstTile + index;
-        const left = offset + index * ROOFTOP_STEP - 34;
-        return <RooftopSegment key={tileIndex} left={left} variant={tileIndex % ROOFTOP_FRAME_COUNT} />;
-      })}
-    </View>
-  );
-}
-
-function KuroRunner({ y, status, frame }) {
-  const isAirborne = y < GROUND_Y - KURO_HEIGHT - 1;
-  const frameIndex = status === 'ended' ? 0 : Math.floor(frame / RUN_FRAME_TICKS) % SPRITE_FRAME_COUNT;
-
-  return (
-    <View
-      style={[
-        styles.kuroFrame,
-        {
-          top: y,
-          opacity: status === 'ended' ? 0.68 : 1,
-          transform: [{ rotate: isAirborne && status !== 'ended' ? '-5deg' : '0deg' }],
-        },
-      ]}
-    >
-      <Image
-        source={KURO_RUN_SHEET}
-        resizeMode="stretch"
-        style={[
-          styles.kuroSheet,
-          WEB_PIXEL_STYLE,
-          {
-            left: -frameIndex * SPRITE_FRAME_WIDTH,
-          },
-        ]}
-      />
-    </View>
-  );
-}
-
-function Chimney({ obstacle }) {
-  return (
-    <View style={[styles.chimney, { left: obstacle.x, height: obstacle.height, top: GROUND_Y - obstacle.height }]}>
-      <View style={styles.chimneyCap} />
-      <View style={styles.chimneyWarmWindow} />
-      <View style={styles.smokeOne} />
-      <View style={styles.smokeTwo} />
-    </View>
-  );
-}
-
-function Gap({ obstacle }) {
-  return (
-    <View style={[styles.gap, { left: obstacle.x, width: obstacle.width }]}>
-      <View style={styles.gapWallLeft} />
-      <View style={styles.gapWallRight} />
-    </View>
-  );
-}
-
-function Obstacle({ obstacle }) {
-  return obstacle.type === 'gap' ? <Gap obstacle={obstacle} /> : <Chimney obstacle={obstacle} />;
-}
-
-export default function RooftopAdventureGame({ onComplete }) {
-  const [world, setWorld] = useState(INITIAL_WORLD);
+export default function RooftopAdventureGame() {
+  const dimensions = useWindowDimensions();
+  const [size, setSize] = useState({ width: dimensions.width, height: dimensions.height });
+  const config = configFor(size.width, size.height);
+  const configRef = useRef(config);
+  const [world, setWorld] = useState(() => createWorld(config));
   const worldRef = useRef(world);
-  const nextObstacleId = useRef(1);
-  const nextStarId = useRef(1);
+  const [best, setBest] = useState(0);
+  const publish = useCallback((next) => { worldRef.current = next; setWorld(next); }, []);
+  const start = useCallback(() => publish(createWorld(configRef.current, 'playing')), [publish]);
+  const doJump = useCallback(() => publish(jump(worldRef.current)), [publish]);
+  const pause = useCallback(() => {
+    const current = worldRef.current;
+    if (current.status === 'playing' || current.status === 'paused') {
+      publish({ ...current, status: current.status === 'playing' ? 'paused' : 'playing' });
+    }
+  }, [publish]);
 
   useEffect(() => {
-    worldRef.current = world;
-  }, [world]);
-
-  const finalScore = useMemo(() => (
-    Math.round(world.distance + world.stars * 18)
-  ), [world.distance, world.stars]);
-
-  const startGame = () => {
-    nextObstacleId.current = 1;
-    nextStarId.current = 1;
-    setWorld({
-      ...INITIAL_WORLD,
-      status: 'playing',
-      collectibles: [makeStar(nextStarId.current++)],
-    });
-  };
-
-  const jump = () => {
-    const current = worldRef.current;
-    if (current.status !== 'playing') return;
-    if (current.jumpsUsed >= MAX_JUMPS) return;
-
-    setWorld((prev) => {
-      if (prev.status !== 'playing' || prev.jumpsUsed >= MAX_JUMPS) return prev;
-      return {
-        ...prev,
-        velocityY: JUMP_FORCE,
-        jumpsUsed: prev.jumpsUsed + 1,
-      };
-    });
-  };
+    const nextConfig = configFor(size.width, size.height);
+    publish(resizeWorld(worldRef.current, configRef.current, nextConfig));
+    configRef.current = nextConfig;
+  }, [size.width, size.height, publish]);
 
   useEffect(() => {
     if (world.status !== 'playing') return undefined;
-
-    const interval = setInterval(() => {
-      setWorld((prev) => {
-        if (prev.status !== 'playing') return prev;
-
-        const nextFrame = prev.frame + 1;
-        const difficulty = Math.min(1.55, 1 + nextFrame / 2600);
-        const speed = 2 + difficulty * 0.34;
-        const nextVelocity = Math.min(prev.velocityY + GRAVITY, 12);
-        const nextY = Math.min(GROUND_Y - KURO_HEIGHT, prev.kuroY + nextVelocity);
-        const landed = nextY >= GROUND_Y - KURO_HEIGHT - 1;
-
-        let obstacles = prev.obstacles
-          .map((obstacle) => ({ ...obstacle, x: obstacle.x - speed }))
-          .filter((obstacle) => obstacle.x > -78);
-
-        let collectibles = prev.collectibles
-          .map((star) => ({ ...star, x: star.x - speed * 0.95 }))
-          .filter((star) => star.x > -38);
-
-        const spawnEvery = Math.max(92, Math.round(136 - difficulty * 18));
-        if (OBSTACLES_ENABLED && nextFrame > 100 && nextFrame % spawnEvery === 0) {
-          obstacles = [...obstacles, makeObstacle(nextObstacleId.current++, nextFrame)];
-        }
-
-        if (nextFrame % 112 === 28) {
-          collectibles = [...collectibles, makeStar(nextStarId.current++)];
-        }
-
-        let stars = prev.stars;
-        collectibles = collectibles.map((star) => {
-          if (!star.collected && canCollectStar(nextY, star)) {
-            stars += 1;
-            return { ...star, collected: true };
-          }
-          return star;
-        });
-
-        const crashed = OBSTACLES_ENABLED && obstacles.some((obstacle) => hasCollision(nextY, obstacle));
-        const finished = crashed || nextFrame >= MAX_FRAMES;
-
-        return {
-          ...prev,
-          status: finished ? 'ended' : 'playing',
-          frame: nextFrame,
-          distance: prev.distance + speed * 0.08,
-          stars,
-          kuroY: nextY,
-          velocityY: landed ? 0 : nextVelocity,
-          jumpsUsed: landed ? 0 : prev.jumpsUsed,
-          obstacles,
-          collectibles,
-        };
-      });
-    }, 33);
-
-    return () => clearInterval(interval);
-  }, [world.status]);
+    let raf;
+    let previous;
+    let accumulated = 0;
+    const animate = (now) => {
+      if (previous !== undefined) accumulated += Math.min((now - previous) / 1000, 0.1);
+      previous = now;
+      let next = worldRef.current;
+      while (accumulated >= STEP) { next = tick(next, configRef.current); accumulated -= STEP; }
+      publish(next);
+      if (next.status === 'playing') raf = requestAnimationFrame(animate);
+    };
+    raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
+  }, [world.status, publish]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
+    if (world.status === 'ended') setBest((value) => Math.max(value, Math.round(world.distance + world.stars * 18)));
+  }, [world.status, world.distance, world.stars]);
 
-    const handleKeyDown = (event) => {
-      if (event.repeat) return;
-      if (event.code === 'Space' || event.code === 'ArrowUp') {
+  useEffect(() => {
+    const autoPause = () => {
+      if (worldRef.current.status === 'playing') publish({ ...worldRef.current, status: 'paused' });
+    };
+    const subscription = AppState.addEventListener('change', (state) => { if (state !== 'active') autoPause(); });
+    if (Platform.OS !== 'web') return () => subscription.remove();
+    const keydown = (event) => {
+      if (event.repeat || event.target?.closest?.('input, textarea, [contenteditable="true"]')) return;
+      if (['Space', 'ArrowUp', 'KeyW'].includes(event.code)) {
+        if (event.code === 'Space' && event.target?.closest?.('button, [role="button"]')) return;
         event.preventDefault();
-        jump();
+        if (worldRef.current.status === 'start' || worldRef.current.status === 'ended') start();
+        else if (worldRef.current.status === 'playing') doJump();
       }
+      if (['Escape', 'KeyP'].includes(event.code)) pause();
     };
-
-    window.addEventListener('keydown', handleKeyDown);
-
+    const visibility = () => { if (document.hidden) autoPause(); };
+    window.addEventListener('keydown', keydown);
+    window.addEventListener('blur', autoPause);
+    document.addEventListener('visibilitychange', visibility);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      subscription.remove();
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('blur', autoPause);
+      document.removeEventListener('visibilitychange', visibility);
     };
-  }, []);
+  }, [doJump, pause, publish, start]);
 
-  const handlePressIn = () => {
-    if (world.status === 'playing') jump();
-  };
-
+  const compact = size.height < 430;
+  const narrow = size.width < 360;
+  const isPlaying = world.status === 'playing';
+  const frame = world.grounded ? Math.floor(world.time * 10) % 4 : 2;
+  const skylineOffset = -(world.scroll * 0.18 % 600);
+  const score = Math.round(world.distance + world.stars * 18);
   return (
-    <View style={styles.wrap}>
-      <TouchableOpacity
-        activeOpacity={0.94}
-        style={styles.board}
-        onPressIn={handlePressIn}
-      >
-        <View style={styles.skyBandTop} />
-        <View style={styles.skyBandMid} />
-        <View style={styles.skyBandLow} />
-        <Moon />
-        <BackgroundStars frame={world.frame} />
-        <SantiagoSkyline frame={world.frame} />
-        <RooftopLayer frame={world.frame} />
-
-        <View style={styles.hud}>
-          <View style={styles.hudPill}>
-            <Ionicons name="footsteps-outline" size={13} color="#c9d8ff" />
-            <Text style={styles.hudText}>{Math.floor(world.distance)} m</Text>
-          </View>
-          <View style={styles.hudPill}>
-            <Ionicons name="star" size={13} color="#ffd76f" />
-            <Text style={styles.hudText}>{world.stars}</Text>
-          </View>
+    <View testID="game-viewport" style={styles.viewport} onLayout={({ nativeEvent: { layout } }) => {
+      if (layout.width > 0 && layout.height > 0) setSize({ width: layout.width, height: layout.height });
+    }}>
+      <View pointerEvents="none" style={[styles.scene, {
+        width: config.width, height: config.height,
+        left: (size.width - config.width) / 2, top: (size.height - config.height) / 2,
+        transform: [{ scale: config.scale }],
+      }]}>
+        <View style={[styles.horizon, { top: config.ground - 170 }]} />
+        {SKY_STARS.map((star, i) => <View key={i} style={[styles.skyStar, {
+          left: ((star.x - world.scroll * 0.03) % config.width + config.width) % config.width,
+          top: star.y * config.ground / 300, width: star.size, height: star.size, opacity: i % 3 === 0 ? 0.45 : 0.8,
+        }]} />)}
+        <View style={[styles.moonGlow, { left: config.width * 0.73, top: config.ground * 0.25 }]}><View style={styles.moon} /></View>
+        {Array.from({ length: Math.ceil(config.width / 600) + 1 }, (_, i) => <Image key={i} source={SKYLINE} resizeMode="stretch" style={[styles.skyline, PIXELS, { left: skylineOffset + i * 600, top: config.ground - 145 }]} />)}
+        {world.roofs.map((roof) => <Building key={roof.id} roof={roof} height={config.height} />)}
+        {world.collectibles.map((star) => <Text key={star.id} style={[styles.star, { left: star.x, top: star.y }]}>✦</Text>)}
+        <View testID="kuro" style={[styles.catFrame, { left: CAT.x, top: world.y,
+          transform: [{ rotate: world.grounded ? '0deg' : world.vy > 0 ? '12deg' : '-8deg' }],
+        }]}>
+          <Image source={CAT_SHEET} resizeMode="stretch" style={[PIXELS, styles.catSheet, { left: -frame * CAT.width }]} />
         </View>
+      </View>
 
-        {OBSTACLES_ENABLED && world.obstacles.map((obstacle) => (
-          <Obstacle key={obstacle.id} obstacle={obstacle} />
-        ))}
-        {world.collectibles.map((star) => (
-          <PixelStar key={star.id} star={star} frame={world.frame} />
-        ))}
-        <KuroRunner y={world.kuroY} status={world.status} frame={world.frame} />
-
-        {world.status === 'start' ? (
-          <View style={styles.panel}>
-            <Text style={styles.panelKicker}>Noche de tejados</Text>
-            <Text style={styles.panelTitle}>Kuro: Aventura de Tejados</Text>
-            <Text style={styles.panelText}>Toca, haz clic o usa espacio para saltar hasta dos veces y juntar estrellitas.</Text>
-            <TouchableOpacity style={styles.primaryButton} onPress={startGame} activeOpacity={0.88}>
-              <Ionicons name="play" size={15} color="#20172f" />
-              <Text style={styles.primaryButtonText}>Jugar</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {world.status === 'ended' ? (
-          <View style={styles.panel}>
-            <Text style={styles.panelKicker}>Aventura completada</Text>
-            <Text style={styles.panelTitle}>{finalScore} puntos</Text>
-            <Text style={styles.panelText}>Kuro corrio {Math.floor(world.distance)} m y junto {world.stars} estrellitas doradas.</Text>
-            <View style={styles.endButtonRow}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={startGame} activeOpacity={0.88}>
-                <Text style={styles.secondaryButtonText}>Jugar otra vez</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButtonSmall} onPress={onComplete} activeOpacity={0.88}>
-                <Text style={styles.primaryButtonText}>Inicio</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : null}
-      </TouchableOpacity>
-      <Text style={styles.footerText}>
-        {world.status === 'playing' ? 'Kuro puede saltar dos veces en el aire.' : 'Salta por los tejados y junta estrellitas.'}
-      </Text>
+      {isPlaying ? <Pressable testID="jump-surface" accessibilityLabel="Saltar" style={StyleSheet.absoluteFill} onPressIn={doJump} /> : null}
+      <View style={[styles.topBar, narrow && { padding: 14 }]} pointerEvents="box-none">
+        <View pointerEvents="none"><Text style={[styles.brand, narrow && { fontSize: 18 }]}>KURO <Text style={styles.brandAccent}>✦</Text></Text><Text style={styles.location}>SANTIAGO · DE NOCHE</Text></View>
+        <View style={styles.stats} pointerEvents="box-none">
+          <View style={styles.stat} pointerEvents="none"><Text style={styles.statText}>{Math.floor(world.distance)} m</Text></View>
+          <View style={styles.stat} pointerEvents="none"><Text style={styles.starCount}>✦ {world.stars}</Text></View>
+          {isPlaying || world.status === 'paused' ? <Pressable accessibilityRole="button" accessibilityLabel={isPlaying ? 'Pausar' : 'Continuar'} onPress={pause} style={styles.pause}><Text style={styles.pauseText}>{isPlaying ? 'Ⅱ' : '▶'}</Text></Pressable> : null}
+        </View>
+      </View>
+      {isPlaying ? <View pointerEvents="none" style={styles.bottomBar}><Text style={styles.hint}>{world.jumps === 2 ? 'Aterriza para volver a saltar' : 'ESPACIO / TOCA  ·  DOBLE SALTO'}</Text><Text style={styles.hint}>P · PAUSA</Text></View> : null}
+      {world.status !== 'playing' ? <View style={styles.overlay}>
+        <View style={[styles.panel, compact && { padding: 20 }]}>
+          <Text style={styles.eyebrow}>{world.status === 'start' ? 'UNA PEQUEÑA AVENTURA NOCTURNA' : world.status === 'paused' ? 'UN RESPIRO EN LOS TEJADOS' : 'OTRA NOCHE, OTRA AVENTURA'}</Text>
+          <Text accessibilityRole="header" style={[styles.title, compact && { fontSize: 27, lineHeight: 31, marginBottom: 10 }]}>{world.status === 'start' ? 'La ciudad duerme.\nKuro no.' : world.status === 'paused' ? 'Tomemos una pausa.' : '¡Cuidado con el vacío!'}</Text>
+          <Text style={[styles.description, compact && { marginBottom: 16 }]}>{world.status === 'start' ? 'Salta de tejado en tejado y sigue las estrellas. Si no saltas, Kuro caerá entre los edificios.' : world.status === 'paused' ? 'Kuro te espera. Continúa cuando quieras.' : `Recorriste ${Math.floor(world.distance)} m y juntaste ${world.stars} ${world.stars === 1 ? 'estrella' : 'estrellas'}.`}</Text>
+          {world.status === 'ended' ? <View style={styles.scoreRow}><Text style={styles.score}>{score} <Text style={styles.scoreLabel}>PUNTOS</Text></Text><Text style={styles.best}>MEJOR DE LA SESIÓN  {Math.max(best, score)}</Text></View> : null}
+          <Pressable accessibilityRole="button" onPress={world.status === 'paused' ? pause : start} style={({ pressed }) => [styles.play, pressed && styles.pressed]}><Text style={styles.playText}>{world.status === 'start' ? 'Jugar  →' : world.status === 'paused' ? 'Continuar  →' : 'Volver a intentar  →'}</Text></Pressable>
+          <Text style={styles.instructions}>Espacio, ↑ o toca para saltar. Dos saltos antes de aterrizar.</Text>
+        </View>
+      </View> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    padding: 16,
-  },
-  board: {
-    width: BOARD_WIDTH,
-    height: BOARD_HEIGHT,
-    alignSelf: 'center',
-    borderRadius: RADII.lg,
-    overflow: 'hidden',
-    backgroundColor: '#101631',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    position: 'relative',
-  },
-  skyBandTop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 62,
-    backgroundColor: '#111936',
-  },
-  skyBandMid: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 62,
-    height: 70,
-    backgroundColor: '#1f2250',
-  },
-  skyBandLow: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 113,
-    backgroundColor: '#3a2454',
-  },
-  moon: {
-    position: 'absolute',
-    right: 72,
-    top: 36,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#ffe8a3',
-    borderWidth: 2,
-    borderColor: '#f0c96e',
-  },
-  moonCraterOne: {
-    position: 'absolute',
-    left: 6,
-    top: 6,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#e7c978',
-  },
-  moonCraterTwo: {
-    position: 'absolute',
-    right: 5,
-    bottom: 6,
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#e7c978',
-  },
-  pixelSprite: {
-    position: 'relative',
-  },
-  pixelBlock: {
-    position: 'absolute',
-  },
-  skyStar: {
-    position: 'absolute',
-    backgroundColor: '#ffd76f',
-  },
-  skylineLayer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 72,
-    height: SKYLINE_HEIGHT,
-    overflow: 'hidden',
-    zIndex: 2,
-  },
-  skylineImage: {
-    position: 'absolute',
-    bottom: 0,
-    width: SKYLINE_WIDTH,
-    height: SKYLINE_HEIGHT,
-    opacity: 0.95,
-  },
-  rooftopLayer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: ROOFTOP_HEIGHT,
-    overflow: 'hidden',
-    zIndex: 4,
-  },
-  rooftopSegment: {
-    position: 'absolute',
-    bottom: 0,
-    width: ROOFTOP_FRAME_WIDTH,
-    height: ROOFTOP_HEIGHT,
-    overflow: 'hidden',
-  },
-  rooftopSheet: {
-    position: 'absolute',
-    top: 0,
-    width: ROOFTOP_SHEET_WIDTH,
-    height: ROOFTOP_IMAGE_HEIGHT,
-  },
-  rooftopBaseFill: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 96,
-    bottom: 0,
-    backgroundColor: '#171a34',
-  },
-  rooftopFacadeFill: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 84,
-    bottom: 0,
-    backgroundColor: '#161932',
-    borderLeftWidth: 2,
-    borderRightWidth: 2,
-    borderColor: '#2f2b54',
-  },
-  hud: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    top: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    zIndex: 8,
-  },
-  hudPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 9,
-    borderRadius: RADII.pill,
-    backgroundColor: 'rgba(11, 14, 32, 0.62)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  hudText: {
-    color: '#f4ecff',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  kuroFrame: {
-    position: 'absolute',
-    left: KURO_X,
-    width: SPRITE_FRAME_WIDTH,
-    height: KURO_HEIGHT,
-    zIndex: 7,
-    overflow: 'hidden',
-  },
-  kuroSheet: {
-    position: 'absolute',
-    top: 0,
-    width: SPRITE_SHEET_WIDTH,
-    height: KURO_HEIGHT,
-  },
-  chimney: {
-    position: 'absolute',
-    width: 22,
-    backgroundColor: '#432843',
-    borderBottomWidth: 3,
-    borderBottomColor: '#211729',
-    zIndex: 6,
-  },
-  chimneyCap: {
-    position: 'absolute',
-    left: -4,
-    right: -4,
-    top: -7,
-    height: 7,
-    borderRadius: 3,
-    backgroundColor: '#6f4563',
-  },
-  chimneyWarmWindow: {
-    position: 'absolute',
-    right: 5,
-    bottom: 7,
-    width: 5,
-    height: 5,
-    backgroundColor: '#f0a15e',
-  },
-  smokeOne: {
-    position: 'absolute',
-    top: -20,
-    left: 2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(223, 206, 236, 0.28)',
-  },
-  smokeTwo: {
-    position: 'absolute',
-    top: -34,
-    left: 12,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: 'rgba(223, 206, 236, 0.18)',
-  },
-  gap: {
-    position: 'absolute',
-    top: GROUND_Y - 4,
-    height: 76,
-    backgroundColor: '#060711',
-    zIndex: 6,
-  },
-  gapWallLeft: {
-    position: 'absolute',
-    left: -7,
-    top: 4,
-    width: 7,
-    height: 40,
-    backgroundColor: '#241833',
-    transform: [{ rotate: '-6deg' }],
-  },
-  gapWallRight: {
-    position: 'absolute',
-    right: -7,
-    top: 3,
-    width: 7,
-    height: 42,
-    backgroundColor: '#241833',
-    transform: [{ rotate: '6deg' }],
-  },
-  collectibleStar: {
-    position: 'absolute',
-    width: 22,
-    height: 22,
-    zIndex: 6,
-  },
-  panel: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(12, 12, 30, 0.78)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-    zIndex: 12,
-  },
-  panelKicker: {
-    color: '#ffd76f',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  panelTitle: {
-    color: COLORS.text,
-    fontSize: 22,
-    lineHeight: 27,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  panelText: {
-    color: '#d9d4ea',
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginBottom: 14,
-  },
-  primaryButton: {
-    minWidth: 112,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 11,
-    paddingHorizontal: 18,
-    borderRadius: RADII.pill,
-    backgroundColor: '#ffd76f',
-  },
-  primaryButtonSmall: {
-    minWidth: 78,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderRadius: RADII.pill,
-    backgroundColor: '#ffd76f',
-  },
-  primaryButtonText: {
-    color: '#20172f',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  secondaryButton: {
-    minWidth: 138,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    borderRadius: RADII.pill,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  secondaryButtonText: {
-    color: COLORS.text,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  endButtonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-    flexWrap: 'wrap',
-  },
-  footerText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginTop: 12,
-  },
+  viewport: { flex: 1, overflow: 'hidden', backgroundColor: '#10152e', ...(Platform.OS === 'web' ? { touchAction: 'none', userSelect: 'none' } : {}) },
+  scene: { position: 'absolute', overflow: 'hidden', backgroundColor: '#111831' },
+  horizon: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#292341' },
+  skyStar: { position: 'absolute', backgroundColor: '#ffdc9a' },
+  moonGlow: { position: 'absolute', width: 75, height: 75, borderRadius: 40, backgroundColor: 'rgba(255,221,146,0.035)', alignItems: 'center', justifyContent: 'center' },
+  moon: { width: 31, height: 31, borderRadius: 16, backgroundColor: '#ffe4a0', borderWidth: 3, borderColor: '#f6cf85' },
+  skyline: { position: 'absolute', width: 600, height: 150, opacity: 0.65 },
+  building: { position: 'absolute', overflow: 'hidden', backgroundColor: '#1b1b32' },
+  facade: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1d2038', borderLeftWidth: 3, borderRightWidth: 3, borderColor: '#383047' },
+  roofEdge: { position: 'absolute', left: 0, right: 0, top: 0, height: 3, backgroundColor: '#b88380' },
+  roofShadow: { position: 'absolute', left: 0, right: 0, top: 4, height: 2, backgroundColor: '#402e44' },
+  catFrame: { position: 'absolute', width: CAT.width, height: CAT.height, overflow: 'hidden' },
+  catSheet: { position: 'absolute', width: CAT.width * 4, height: CAT.height },
+  star: { position: 'absolute', color: '#ffdc85', fontSize: 22, lineHeight: 24, textShadowColor: '#bc7834', textShadowRadius: 7 },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, padding: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  brand: { color: '#fff4dd', fontSize: 24, fontWeight: '900', letterSpacing: 4 },
+  brandAccent: { color: '#f6cf85' },
+  location: { color: '#a3a5bc', fontSize: 8, letterSpacing: 1.5, marginTop: 4 },
+  stats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  stat: { borderRadius: 22, backgroundColor: 'rgba(9,12,29,0.6)', paddingHorizontal: 14, paddingVertical: 11 },
+  statText: { color: '#f7f0e2', fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] },
+  starCount: { color: '#ffdc85', fontWeight: '800', fontSize: 14 },
+  pause: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#292c43', alignItems: 'center', justifyContent: 'center' },
+  pauseText: { color: '#f9e9ce', fontSize: 18, fontWeight: '800' },
+  bottomBar: { position: 'absolute', bottom: 18, left: 22, right: 22, flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  hint: { color: '#b4afc4', fontSize: 10, letterSpacing: 1 },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(8,12,28,0.58)', justifyContent: 'center', alignItems: 'center', padding: 18 },
+  panel: { width: '100%', maxWidth: 480, padding: 28, backgroundColor: 'rgba(20,25,46,0.96)', borderRadius: 24, borderWidth: 1, borderColor: '#3c3c55' },
+  eyebrow: { color: '#f4ce87', fontSize: 10, letterSpacing: 1.6, fontWeight: '700', marginBottom: 14 },
+  title: { color: '#fff1da', fontSize: 34, lineHeight: 39, fontWeight: '800', marginBottom: 16 },
+  description: { color: '#c1bed1', fontSize: 15, lineHeight: 23, marginBottom: 24 },
+  play: { minHeight: 52, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f6d18a', borderRadius: 14 },
+  pressed: { opacity: 0.8 },
+  playText: { color: '#272137', fontSize: 16, fontWeight: '800' },
+  instructions: { color: '#9392ac', fontSize: 12, lineHeight: 18, marginTop: 16, textAlign: 'center' },
+  scoreRow: { marginBottom: 22 },
+  score: { color: '#f6d18a', fontSize: 32, fontWeight: '800' },
+  scoreLabel: { color: '#b2adc3', fontSize: 11, letterSpacing: 1 },
+  best: { color: '#9392ac', fontSize: 10, letterSpacing: 1, marginTop: 6 },
 });

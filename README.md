@@ -11,21 +11,23 @@ npm ci
 npm run web
 ```
 
-Open http://localhost:8082. Click **Jugar**, then click, tap, press **Space**, or press **Arrow Up** to jump. You can jump twice before landing. Runs last approximately one minute; **Jugar otra vez** restarts and **Inicio** returns to the title screen. Scores are session-only.
+Open http://localhost:8082. The game fills the browser viewport in desktop, portrait, and landscape layouts. Click **Jugar**, then click, tap, press **Space**, **Arrow Up**, or **W** to jump. You can jump twice before landing. Missing a gap makes Kuro fall and ends the run; **Volver a intentar** restarts. Press **P** or **Escape**, or use the pause button, to pause/resume. Switching away pauses automatically. Scores and the best score last for the current page session.
 
 ```sh
+npm test       # deterministic gameplay regression tests
 npm run build  # static web build in dist/
 npm start     # Expo development server for mobile
 ```
 
 ## Project layout
 
-- `App.js`: standalone game page and return-to-title flow.
-- `src/minigames/RooftopAdventureGame.js`: gameplay, physics, scoring, and rendering.
-- `src/theme/tokens.js`: the small set of theme values used by the game.
+- `App.js`: standalone full-screen entry point.
+- `src/minigames/RooftopAdventureGame.js`: responsive scene, input, animation, and game screens.
+- `src/game/engine.mjs`: deterministic platform generation, gravity, landing, double jumps, and scoring.
+- `tests/engine.test.mjs`: falls, gap crossing, edge grace, scoring, pause, and resize regression coverage.
 - `assets/kuro/`: cat sprite sheet, Santiago skyline, and rooftop tiles.
 
-The original game balance and 310 × 245 playfield are preserved as a baseline for polishing. Obstacles remain disabled, matching the source branch. No environment variables or backend setup is needed.
+Visible roofs and collision platforms share the same coordinates and scroll speed. The simulation uses fixed 60 Hz steps with requestAnimationFrame rendering. Runs are endless with gradually increasing speed, small edge grace and jump buffering, and stars placed along gap crossings. The rooftop artwork is cropped using its actual uneven sprite bounds. Resizing preserves the current run. No environment variables or backend setup is needed.
 
 ## Origin and attribution
 
