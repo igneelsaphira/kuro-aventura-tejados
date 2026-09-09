@@ -10,6 +10,9 @@ const ROOFS = require('../../assets/kuro/rooftop-segments.png');
 const BEETLE_SHEET = require('../../bichito.png');
 const PIXELS = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : {};
 const BEETLE_FRAME = 64;
+// The sprite includes a few transparent pixels below Kuro's paws. Lower only
+// the artwork so the physics stay unchanged while the paws meet the roof lip.
+const CAT_VISUAL_Y_OFFSET = 6;
 const MOON_PHASES = require('../../assets/kuro/moon-phases.png');
 // Source rectangle of the central full moon in the supplied 1200 x 679 sheet.
 const MOON_CROP = { x: 523, y: 291, width: 145, height: 145 };
@@ -235,7 +238,7 @@ export default function RooftopAdventureGame() {
         {world.roofs.map((roof) => <Building key={roof.id} roof={roof} height={config.height} />)}
         {world.collectibles.map((star) => <Text key={star.id} style={[styles.star, { left: star.x, top: star.y }]}>✦</Text>)}
         {world.obstacles.map((obstacle) => { const frame = Math.floor(world.time * 5) % 4; return <View key={obstacle.id} testID={obstacle.id} style={[styles.beetleFrame, { left: obstacle.x - 6, top: obstacle.y - 10 }]}><Image source={BEETLE_SHEET} resizeMode="stretch" style={[PIXELS, styles.beetleSheet, { left: -frame * BEETLE_FRAME }]} /></View>; })}
-        <View testID="kuro" style={[styles.catFrame, { left: CAT.x, top: world.y,
+        <View testID="kuro" style={[styles.catFrame, { left: CAT.x, top: world.y + CAT_VISUAL_Y_OFFSET,
           transform: [{ rotate: world.grounded ? '0deg' : world.vy > 0 ? '12deg' : '-8deg' }],
         }]}>
           <Image source={catSprite.sheet} resizeMode="stretch" style={[PIXELS, styles.catSheet, { left: -catSprite.frame * CAT.width }]} />
