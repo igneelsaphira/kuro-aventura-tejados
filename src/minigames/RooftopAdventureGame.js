@@ -4,6 +4,7 @@ import { BEETLE, CAT, STEP, configFor, createWorld, jump, resizeWorld, tick } fr
 
 const CAT_SHEET = require('../../assets/kuro/kuro-run.png');
 const SKYLINE = require('../../assets/kuro/santiago-skyline.png');
+const ROOFS = require('../../assets/kuro/rooftop-segments.png');
 const BEETLE_SHEET = require('../../bichito.png');
 const PIXELS = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : {};
 const BEETLE_FRAME = 64;
