@@ -1,5 +1,6 @@
 export const CAT = { x: 58, width: 64, height: 44, foot: 42 };
 export const STEP = 1 / 60;
+export const FIRST_MISSION_DISTANCE = 300;
 const GRAVITY = 1050;
 const JUMP = -370;
 
@@ -11,12 +12,13 @@ export function configFor(width, height) {
 function extendWorld(world, config) {
   const roofs = [...world.roofs];
   const stars = [...world.collectibles];
+  const difficulty = Math.max(0, world.night - 1);
   let last = roofs[roofs.length - 1];
   while (last.x + last.width < config.width + 380) {
     const id = last.id + 1;
-    const gap = 76 + (id * 13 % 29);
+    const gap = 76 + (id * 13 % 29) + Math.min(34, difficulty * 7);
     const x = last.x + last.width + gap;
-    last = { id, x, width: 220 + (id * 37 % 81), y: config.ground };
+    last = { id, x, width: Math.max(170, 220 + (id * 37 % 81) - Math.min(70, difficulty * 10)), y: config.ground };
     roofs.push(last);
     // Stars trace the jump across each gap, above the landing edge.
     stars.push({ id: `${id}-a`, x: x - gap / 2, y: config.ground - 85 });
@@ -25,8 +27,8 @@ function extendWorld(world, config) {
   return { ...world, roofs, collectibles: stars };
 }
 
-export function createWorld(config, status = 'start') {
-  return extendWorld({ status, time: 0, scroll: 0, distance: 0, stars: 0,
+export function createWorld(config, status = 'start', night = 1) {
+  return extendWorld({ status, night, mission: { id: 'distance', target: FIRST_MISSION_DISTANCE + (night - 1) * 100, completed: false }, time: 0, scroll: 0, distance: 0, stars: 0,
     y: config.ground - CAT.height, vy: 0, grounded: true, jumps: 0,
     coyote: 0.1, buffer: 0, roofs: [{ id: 0, x: -80, width: 450, y: config.ground }],
     collectibles: [], reason: null }, config);
@@ -50,7 +52,7 @@ export function jump(world) {
 
 export function tick(world, config, dt = STEP) {
   if (world.status !== 'playing') return world;
-  const speed = Math.min(215, 145 + world.time * 1.1);
+  const speed = Math.min(300, 145 + (world.night - 1) * 18 + world.time * 1.1);
   const travel = speed * dt;
   const roofs = world.roofs.map((roof) => ({ ...roof, x: roof.x - travel }))
     .filter((roof) => roof.x + roof.width > -100);
@@ -77,6 +79,7 @@ export function tick(world, config, dt = STEP) {
     oldBottom > roof.y + 4 && world.y < config.height);
   const status = y > config.height + CAT.height ? 'ended' : 'playing';
   let stars = world.stars;
+  const distance = world.distance + travel * 0.08;
   const collectibles = world.collectibles.map((star) => ({ ...star, x: star.x - travel }))
     .filter((star) => {
       if (star.x < -24) return false;
@@ -87,7 +90,7 @@ export function tick(world, config, dt = STEP) {
       return true;
     });
   let next = extendWorld({ ...world, time: world.time + dt, scroll: world.scroll + travel,
-    distance: world.distance + travel * 0.08, stars, y, vy, grounded, jumps, coyote,
+    distance, mission: { ...world.mission, completed: world.mission.completed || distance >= world.mission.target }, stars, y, vy, grounded, jumps, coyote,
     buffer: Math.max(0, world.buffer - dt), roofs, collectibles, status,
     reason: status === 'ended' ? 'fall' : world.reason }, config);
   if (wall) next = { ...next, jumps: 2, coyote: 0 };

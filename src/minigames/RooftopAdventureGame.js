@@ -30,11 +30,16 @@ export default function RooftopAdventureGame() {
   const [size, setSize] = useState({ width: dimensions.width, height: dimensions.height });
   const config = configFor(size.width, size.height);
   const configRef = useRef(config);
-  const [world, setWorld] = useState(() => createWorld(config));
+  const [world, setWorld] = useState(() => createWorld(config, 'start', 1));
+  const [nextNight, setNextNight] = useState(1);
   const worldRef = useRef(world);
   const [best, setBest] = useState(0);
   const publish = useCallback((next) => { worldRef.current = next; setWorld(next); }, []);
-  const start = useCallback(() => publish(createWorld(configRef.current, 'playing')), [publish]);
+  const start = useCallback(() => {
+    const night = nextNight;
+    publish(createWorld(configRef.current, 'playing', night));
+    setNextNight((value) => Math.min(5, value + 1));
+  }, [nextNight, publish]);
   const doJump = useCallback(() => publish(jump(worldRef.current)), [publish]);
   const pause = useCallback(() => {
     const current = worldRef.current;
@@ -131,19 +136,20 @@ export default function RooftopAdventureGame() {
 
       {isPlaying ? <Pressable testID="jump-surface" accessibilityLabel="Saltar" style={StyleSheet.absoluteFill} onPressIn={doJump} /> : null}
       <View style={[styles.topBar, narrow && { padding: 14 }]} pointerEvents="box-none">
-        <View pointerEvents="none"><Text style={[styles.brand, narrow && { fontSize: 18 }]}>KURO <Text style={styles.brandAccent}>✦</Text></Text><Text style={styles.location}>SANTIAGO · DE NOCHE</Text></View>
+        <View pointerEvents="none"><Text style={[styles.brand, narrow && { fontSize: 18 }]}>KURO <Text style={styles.brandAccent}>✦</Text></Text><Text style={styles.location}>NOCHE {world.night} · SANTIAGO · DE NOCHE</Text></View>
         <View style={styles.stats} pointerEvents="box-none">
           <View style={styles.stat} pointerEvents="none"><Text style={styles.statText}>{Math.floor(world.distance)} m</Text></View>
           <View style={styles.stat} pointerEvents="none"><Text style={styles.starCount}>✦ {world.stars}</Text></View>
           {isPlaying || world.status === 'paused' ? <Pressable accessibilityRole="button" accessibilityLabel={isPlaying ? 'Pausar' : 'Continuar'} onPress={pause} style={styles.pause}><Text style={styles.pauseText}>{isPlaying ? 'Ⅱ' : '▶'}</Text></Pressable> : null}
         </View>
       </View>
-      {isPlaying ? <View pointerEvents="none" style={styles.bottomBar}><Text style={styles.hint}>{world.jumps === 2 ? 'Aterriza para volver a saltar' : 'ESPACIO / TOCA  ·  DOBLE SALTO'}</Text><Text style={styles.hint}>P · PAUSA</Text></View> : null}
+      {isPlaying ? <View pointerEvents="none" style={styles.bottomBar}><Text style={styles.hint}>{world.mission.completed ? 'MISIÓN COMPLETADA  ·  SIGUE EXPLORANDO' : `MISIÓN  ·  ${Math.floor(world.distance)} / ${world.mission.target} m`}</Text><Text style={styles.hint}>ESPACIO / TOCA  ·  DOBLE SALTO</Text></View> : null}
       {world.status !== 'playing' ? <View style={styles.overlay}>
         <View style={[styles.panel, compact && { padding: 20 }]}>
-          <Text style={styles.eyebrow}>{world.status === 'start' ? 'UNA PEQUEÑA AVENTURA NOCTURNA' : world.status === 'paused' ? 'UN RESPIRO EN LOS TEJADOS' : 'OTRA NOCHE, OTRA AVENTURA'}</Text>
+          <Text style={styles.eyebrow}>{world.status === 'start' ? `NOCHE ${world.night} · PRIMERA MISIÓN` : world.status === 'paused' ? `NOCHE ${world.night} · UN RESPIRO EN LOS TEJADOS` : `NOCHE ${world.night} · OTRA AVENTURA`}</Text>
           <Text accessibilityRole="header" style={[styles.title, compact && { fontSize: 27, lineHeight: 31, marginBottom: 10 }]}>{world.status === 'start' ? 'La ciudad duerme.\nKuro no.' : world.status === 'paused' ? 'Tomemos una pausa.' : '¡Cuidado con el vacío!'}</Text>
           <Text style={[styles.description, compact && { marginBottom: 16 }]}>{world.status === 'start' ? 'Salta de tejado en tejado y sigue las estrellas. Si no saltas, Kuro caerá entre los edificios.' : world.status === 'paused' ? 'Kuro te espera. Continúa cuando quieras.' : `Recorriste ${Math.floor(world.distance)} m y juntaste ${world.stars} ${world.stars === 1 ? 'estrella' : 'estrellas'}.`}</Text>
+          <Text style={styles.mission}>{world.mission.completed ? '✦ Misión completada' : `Primera misión: recorre ${world.mission.target} m`}</Text>
           {world.status === 'ended' ? <View style={styles.scoreRow}><Text style={styles.score}>{score} <Text style={styles.scoreLabel}>PUNTOS</Text></Text><Text style={styles.best}>MEJOR DE LA SESIÓN  {Math.max(best, score)}</Text></View> : null}
           <Pressable accessibilityRole="button" onPress={world.status === 'paused' ? pause : start} style={({ pressed }) => [styles.play, pressed && styles.pressed]}><Text style={styles.playText}>{world.status === 'start' ? 'Jugar  →' : world.status === 'paused' ? 'Continuar  →' : 'Volver a intentar  →'}</Text></Pressable>
           <Text style={styles.instructions}>Espacio, ↑ o toca para saltar. Dos saltos antes de aterrizar.</Text>
@@ -189,6 +195,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.8 },
   playText: { color: '#272137', fontSize: 16, fontWeight: '800' },
   instructions: { color: '#9392ac', fontSize: 12, lineHeight: 18, marginTop: 16, textAlign: 'center' },
+  mission: { color: '#f4ce87', fontSize: 12, fontWeight: '700', marginBottom: 18 },
   scoreRow: { marginBottom: 22 },
   score: { color: '#f6d18a', fontSize: 32, fontWeight: '800' },
   scoreLabel: { color: '#b2adc3', fontSize: 11, letterSpacing: 1 },

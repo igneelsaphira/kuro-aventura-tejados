@@ -90,3 +90,21 @@ test('successive gaps remain traversable as the run speeds up', () => {
   assert.ok(world.distance > 2000);
   assert.ok(world.roofs[0].id > 50);
 });
+
+
+test('nights increase speed and widen gaps progressively', () => {
+  const nightOne = createWorld(config, 'playing', 1);
+  const nightThree = createWorld(config, 'playing', 3);
+  const oneFrame = tick(nightOne, config);
+  const threeFrame = tick(nightThree, config);
+  assert.ok(threeFrame.scroll > oneFrame.scroll);
+  assert.ok(nightThree.roofs[1].x > nightOne.roofs[1].x);
+});
+
+test('the first mission completes after reaching its distance target', () => {
+  let world = createWorld(config, 'playing', 1);
+  assert.equal(world.mission.completed, false);
+  for (let i = 0; i < 130; i++) world = tick(world, config);
+  assert.equal(world.mission.target, 300);
+  assert.equal(world.mission.completed, true);
+});
