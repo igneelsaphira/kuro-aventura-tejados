@@ -19,6 +19,24 @@ npm run build  # static web build in dist/
 npm start     # Expo development server for mobile
 ```
 
+## Visual update handoff
+
+The `codex/visual-polish-handoff` branch contains the current playable version.
+Use this branch when opening the project in another coding harness; these updates
+have not been merged into `main`.
+
+- Jump frames follow vertical velocity and return to the running sheet on landing.
+- The secondary city uses `santiago-urban-depth-cutout.png`, with opaque buildings
+  and transparent sky, in front of the main skyline and behind playable roofs.
+- Rooftop facade rendering and the full moon crop from `moon-phases.png` are included.
+- Earlier urban artwork variants are retained as source references; the current
+  renderer only loads the cutout version.
+- Gameplay physics remain in `src/game/engine.mjs`; Kuro remains 64 x 44.
+
+Run `npm ci`, `npm test`, and `npm run build` after checkout. For an interactive
+preview, run `npm run web` and open http://localhost:8082. A static hosting harness
+can serve `dist/` after the build. No Codex-specific runtime is required.
+
 ## Project layout
 
 - `App.js`: standalone full-screen entry point.
