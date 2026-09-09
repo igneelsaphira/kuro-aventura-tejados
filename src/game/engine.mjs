@@ -1,6 +1,7 @@
 export const CAT = { x: 58, width: 64, height: 44, foot: 42 };
 export const STEP = 1 / 60;
 export const FIRST_MISSION_DISTANCE = 300;
+export const BEETLE = { width: 52, height: 44 };
 const GRAVITY = 1050;
 const JUMP = -370;
 
@@ -12,6 +13,7 @@ export function configFor(width, height) {
 function extendWorld(world, config) {
   const roofs = [...world.roofs];
   const stars = [...world.collectibles];
+  const obstacles = [...world.obstacles];
   const difficulty = Math.max(0, world.night - 1);
   let last = roofs[roofs.length - 1];
   while (last.x + last.width < config.width + 380) {
@@ -23,22 +25,24 @@ function extendWorld(world, config) {
     // Stars trace the jump across each gap, above the landing edge.
     stars.push({ id: `${id}-a`, x: x - gap / 2, y: config.ground - 85 });
     stars.push({ id: `${id}-b`, x: x + 40, y: config.ground - 65 });
+    if (id % 3 === 0) obstacles.push({ id: `beetle-${id}`, x: x + 92, y: config.ground - BEETLE.height, width: BEETLE.width, height: BEETLE.height });
   }
-  return { ...world, roofs, collectibles: stars };
+  return { ...world, roofs, collectibles: stars, obstacles };
 }
 
 export function createWorld(config, status = 'start', night = 1) {
   return extendWorld({ status, night, mission: { id: 'distance', target: FIRST_MISSION_DISTANCE + (night - 1) * 100, completed: false }, time: 0, scroll: 0, distance: 0, stars: 0,
     y: config.ground - CAT.height, vy: 0, grounded: true, jumps: 0,
     coyote: 0.1, buffer: 0, roofs: [{ id: 0, x: -80, width: 450, y: config.ground }],
-    collectibles: [], reason: null }, config);
+    collectibles: [], obstacles: [], reason: null }, config);
 }
 
 export function resizeWorld(world, previous, config) {
   const dy = config.ground - previous.ground;
   return extendWorld({ ...world, y: world.y + dy,
     roofs: world.roofs.map((roof) => ({ ...roof, y: roof.y + dy })),
-    collectibles: world.collectibles.map((star) => ({ ...star, y: star.y + dy })) }, config);
+    collectibles: world.collectibles.map((star) => ({ ...star, y: star.y + dy })),
+    obstacles: world.obstacles.map((obstacle) => ({ ...obstacle, y: obstacle.y + dy })) }, config);
 }
 
 export function jump(world) {
@@ -77,7 +81,13 @@ export function tick(world, config, dt = STEP) {
   // A roof edge is a solid wall, not a new floor to snap up onto.
   const wall = roofs.some((roof) => foot >= roof.x && foot <= roof.x + roof.width &&
     oldBottom > roof.y + 4 && world.y < config.height);
-  const status = y > config.height + CAT.height ? 'ended' : 'playing';
+  const obstacles = world.obstacles.map((obstacle) => ({ ...obstacle, x: obstacle.x - travel }))
+    .filter((obstacle) => obstacle.x + obstacle.width > -80);
+  const hitObstacle = obstacles.some((obstacle) =>
+    CAT.x + CAT.width - 8 > obstacle.x && CAT.x + 8 < obstacle.x + obstacle.width &&
+    y + CAT.height - 6 > obstacle.y && y + 8 < obstacle.y + obstacle.height
+  );
+  const status = hitObstacle || y > config.height + CAT.height ? 'ended' : 'playing';
   let stars = world.stars;
   const distance = world.distance + travel * 0.08;
   const collectibles = world.collectibles.map((star) => ({ ...star, x: star.x - travel }))
@@ -91,8 +101,8 @@ export function tick(world, config, dt = STEP) {
     });
   let next = extendWorld({ ...world, time: world.time + dt, scroll: world.scroll + travel,
     distance, mission: { ...world.mission, completed: world.mission.completed || distance >= world.mission.target }, stars, y, vy, grounded, jumps, coyote,
-    buffer: Math.max(0, world.buffer - dt), roofs, collectibles, status,
-    reason: status === 'ended' ? 'fall' : world.reason }, config);
+    buffer: Math.max(0, world.buffer - dt), roofs, collectibles, obstacles, status,
+    reason: status === 'ended' ? (hitObstacle ? 'obstacle' : 'fall') : world.reason }, config);
   if (wall) next = { ...next, jumps: 2, coyote: 0 };
   if (grounded && next.buffer > 0) next = jump(next);
   return next;

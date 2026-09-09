@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, AppState } from 'react-native';
-import { CAT, STEP, configFor, createWorld, jump, resizeWorld, tick } from '../game/engine.mjs';
+import { BEETLE, CAT, STEP, configFor, createWorld, jump, resizeWorld, tick } from '../game/engine.mjs';
 
 const CAT_SHEET = require('../../assets/kuro/kuro-run.png');
 const SKYLINE = require('../../assets/kuro/santiago-skyline.png');
-const ROOFS = require('../../assets/kuro/rooftop-segments.png');
+const BEETLE_SHEET = require('../../assets/kuro/beetle-shell.png');
 const PIXELS = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : {};
+const BEETLE_FRAME = 64;
 const SKY_STARS = Array.from({ length: 36 }, (_, i) => ({ x: (i * 137.3) % 1000, y: 25 + (i * 47 % 180), size: i % 4 === 0 ? 2 : 1 }));
 
 function Building({ roof, height }) {
@@ -127,6 +128,7 @@ export default function RooftopAdventureGame() {
         {Array.from({ length: Math.ceil(config.width / 600) + 1 }, (_, i) => <Image key={i} source={SKYLINE} resizeMode="stretch" style={[styles.skyline, PIXELS, { left: skylineOffset + i * 600, top: config.ground - 145 }]} />)}
         {world.roofs.map((roof) => <Building key={roof.id} roof={roof} height={config.height} />)}
         {world.collectibles.map((star) => <Text key={star.id} style={[styles.star, { left: star.x, top: star.y }]}>✦</Text>)}
+        {world.obstacles.map((obstacle) => { const frame = Math.floor(world.time * 5) % 4; return <View key={obstacle.id} testID={obstacle.id} style={[styles.beetleFrame, { left: obstacle.x - 6, top: obstacle.y - 10 }]}><Image source={BEETLE_SHEET} resizeMode="stretch" style={[PIXELS, styles.beetleSheet, { left: -frame * BEETLE_FRAME }]} /></View>; })}
         <View testID="kuro" style={[styles.catFrame, { left: CAT.x, top: world.y,
           transform: [{ rotate: world.grounded ? '0deg' : world.vy > 0 ? '12deg' : '-8deg' }],
         }]}>
@@ -147,7 +149,7 @@ export default function RooftopAdventureGame() {
       {world.status !== 'playing' ? <View style={styles.overlay}>
         <View style={[styles.panel, compact && { padding: 20 }]}>
           <Text style={styles.eyebrow}>{world.status === 'start' ? `NOCHE ${world.night} · PRIMERA MISIÓN` : world.status === 'paused' ? `NOCHE ${world.night} · UN RESPIRO EN LOS TEJADOS` : `NOCHE ${world.night} · OTRA AVENTURA`}</Text>
-          <Text accessibilityRole="header" style={[styles.title, compact && { fontSize: 27, lineHeight: 31, marginBottom: 10 }]}>{world.status === 'start' ? 'La ciudad duerme.\nKuro no.' : world.status === 'paused' ? 'Tomemos una pausa.' : '¡Cuidado con el vacío!'}</Text>
+          <Text accessibilityRole="header" style={[styles.title, compact && { fontSize: 27, lineHeight: 31, marginBottom: 10 }]}>{world.status === 'start' ? 'La ciudad duerme.\nKuro no.' : world.status === 'paused' ? 'Tomemos una pausa.' : world.reason === 'obstacle' ? '¡Cuidado con el bichito!' : '¡Cuidado con el vacío!'}</Text>
           <Text style={[styles.description, compact && { marginBottom: 16 }]}>{world.status === 'start' ? 'Salta de tejado en tejado y sigue las estrellas. Si no saltas, Kuro caerá entre los edificios.' : world.status === 'paused' ? 'Kuro te espera. Continúa cuando quieras.' : `Recorriste ${Math.floor(world.distance)} m y juntaste ${world.stars} ${world.stars === 1 ? 'estrella' : 'estrellas'}.`}</Text>
           <Text style={styles.mission}>{world.mission.completed ? '✦ Misión completada' : `Primera misión: recorre ${world.mission.target} m`}</Text>
           {world.status === 'ended' ? <View style={styles.scoreRow}><Text style={styles.score}>{score} <Text style={styles.scoreLabel}>PUNTOS</Text></Text><Text style={styles.best}>MEJOR DE LA SESIÓN  {Math.max(best, score)}</Text></View> : null}
@@ -172,6 +174,8 @@ const styles = StyleSheet.create({
   roofEdge: { position: 'absolute', left: 0, right: 0, top: 0, height: 3, backgroundColor: '#b88380' },
   roofShadow: { position: 'absolute', left: 0, right: 0, top: 4, height: 2, backgroundColor: '#402e44' },
   catFrame: { position: 'absolute', width: CAT.width, height: CAT.height, overflow: 'hidden' },
+  beetleFrame: { position: 'absolute', width: BEETLE_FRAME, height: BEETLE_FRAME, overflow: 'hidden', zIndex: 6 },
+  beetleSheet: { position: 'absolute', width: BEETLE_FRAME * 4, height: BEETLE_FRAME },
   catSheet: { position: 'absolute', width: CAT.width * 4, height: CAT.height },
   star: { position: 'absolute', color: '#ffdc85', fontSize: 22, lineHeight: 24, textShadowColor: '#bc7834', textShadowRadius: 7 },
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, padding: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
