@@ -191,9 +191,8 @@ export default function RooftopAdventureGame() {
   const urbanDepthTile = Math.floor(urbanDepthTravel / urbanDepthWidth);
   const urbanDepthOffset = -(urbanDepthTravel % urbanDepthWidth);
   const score = Math.round(world.distance + world.stars * 18);
-  const heartPulse = world.invulnerable > 0.86
-    ? 1 + Math.sin(((1.15 - world.invulnerable) / 0.29) * Math.PI) * 0.22
-    : 1;
+  const heartTwinkle = 1 + Math.sin(world.time * 4.5) * 0.035;
+  const heartGlow = 0.9 + Math.sin(world.time * 4.5) * 0.1;
   return (
     <View testID="game-viewport" style={styles.viewport} onLayout={({ nativeEvent: { layout } }) => {
       if (layout.width > 0 && layout.height > 0) setSize({ width: layout.width, height: layout.height });
@@ -273,10 +272,16 @@ export default function RooftopAdventureGame() {
           <Text style={styles.location}>NOCHE {world.night} · SANTIAGO · DE NOCHE</Text>
           <View
             accessibilityLabel={`${world.hearts} vidas`}
-            style={[styles.heartsRow, narrow && styles.heartsRowCompact, { transform: [{ scale: heartPulse }] }]}
+            style={[styles.heartsRow, narrow && styles.heartsRowCompact]}
           >
             {[0, 1, 2].map((index) => (
-              <Text key={`heart-${index}`} style={[styles.heart, narrow && styles.heartCompact, index >= world.hearts && styles.emptyHeart]}>
+              <Text key={`heart-${index}`} style={[
+                styles.heart,
+                narrow && styles.heartCompact,
+                index < world.hearts
+                  ? { opacity: heartGlow, transform: [{ scale: heartTwinkle }] }
+                  : styles.emptyHeart,
+              ]}>
                 {index < world.hearts ? '♥' : '♡'}
               </Text>
             ))}
@@ -330,9 +335,9 @@ const styles = StyleSheet.create({
   location: { color: '#a3a5bc', fontSize: 8, letterSpacing: 1.5, marginTop: 4 },
   heartsRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 7, marginTop: 8 },
   heartsRowCompact: { gap: 5, marginTop: 6 },
-  heart: { color: '#ff7088', fontSize: 24, lineHeight: 27, fontWeight: '900', textShadowColor: 'rgba(255,92,125,0.72)', textShadowRadius: 8 },
+  heart: { color: '#ff7892', fontSize: 26, lineHeight: 29, fontWeight: '900', textShadowColor: 'rgba(255,196,210,0.95)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
   heartCompact: { fontSize: 21, lineHeight: 24 },
-  emptyHeart: { color: '#625d73', textShadowColor: 'transparent', textShadowRadius: 0 },
+  emptyHeart: { color: '#555064', opacity: 0.48, textShadowColor: 'transparent', textShadowRadius: 0, transform: [{ scale: 0.72 }] },
   stats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stat: { borderRadius: 22, backgroundColor: 'rgba(9,12,29,0.6)', paddingHorizontal: 14, paddingVertical: 11 },
   statCompact: { paddingHorizontal: 9, paddingVertical: 9 },
