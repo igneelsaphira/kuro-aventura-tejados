@@ -122,3 +122,26 @@ test('touching a beetle ends the run as an obstacle collision', () => {
   assert.equal(world.status, 'ended');
   assert.equal(world.reason, 'obstacle');
 });
+
+test('landing on a beetle defeats it, bounces Kuro, and makes it fall', () => {
+  let world = createWorld(config, 'playing', 1);
+  const beetleY = config.ground - 92;
+  world = {
+    ...world,
+    y: beetleY - CAT.height - 1,
+    vy: 120,
+    grounded: false,
+    jumps: 1,
+    obstacles: [{ id: 'beetle-stomp', x: CAT.x + 12, y: beetleY, width: 52, height: 44 }],
+  };
+
+  world = tick(world, config, STEP);
+  assert.equal(world.status, 'playing');
+  assert.ok(world.vy < 0, 'stomping should bounce Kuro upward');
+  assert.equal(world.obstacles[0].state, 'defeated');
+
+  const defeatedY = world.obstacles[0].y;
+  world = advance(world, 8);
+  assert.ok(world.obstacles[0].y > defeatedY, 'the defeated beetle should fall downward');
+  assert.equal(world.status, 'playing');
+});
