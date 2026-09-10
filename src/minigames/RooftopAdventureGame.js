@@ -8,9 +8,10 @@ const SKYLINE = require('../../assets/kuro/santiago-skyline.png');
 const URBAN_DETAIL = require('../../assets/kuro/santiago-urban-depth-cutout.png');
 const ROOFS = require('../../assets/kuro/rooftop-segments.png');
 const BEETLE_SHEET = require('../../bichito.png');
-const BEETLE_DEFEATED_SHEET = require('../../assets/kuro/bichito-defeated.png');
+const BEETLE_DEFEATED_SHEET = require('../../assets/kuro/bichito-defeated-v2.png');
 const PIXELS = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : {};
 const BEETLE_FRAME = 64;
+const BEETLE_DEFEATED_FRAMES = 3;
 // The sprite includes a few transparent pixels below Kuro's paws. Lower only
 // the artwork so the physics stay unchanged while the paws meet the roof lip.
 const CAT_VISUAL_Y_OFFSET = 6;
@@ -242,13 +243,17 @@ export default function RooftopAdventureGame() {
           const defeated = obstacle.state === 'defeated';
           const defeatAge = defeated ? Math.max(0, world.time - obstacle.defeatedAt) : 0;
           const frame = defeated
-            ? Math.min(3, Math.floor(defeatAge / 0.18))
+            ? Math.min(BEETLE_DEFEATED_FRAMES - 1, Math.floor(defeatAge / 0.18))
             : Math.floor(world.time * 5) % 4;
+          const fallRotation = defeated ? Math.min(42, Math.max(0, (defeatAge - 0.34) * 70)) : 0;
           return <View key={obstacle.id} testID={obstacle.id} style={[styles.beetleFrame, {
             left: obstacle.x - 6,
             top: obstacle.y - 10,
-            transform: [{ rotate: defeated && frame >= 2 ? `${(frame - 1) * 12}deg` : '0deg' }],
-          }]}><Image source={defeated ? BEETLE_DEFEATED_SHEET : BEETLE_SHEET} resizeMode="stretch" style={[PIXELS, styles.beetleSheet, { left: -frame * BEETLE_FRAME }]} /></View>;
+            transform: [{ rotate: `${fallRotation}deg` }],
+          }]}><Image source={defeated ? BEETLE_DEFEATED_SHEET : BEETLE_SHEET} resizeMode="stretch" style={[PIXELS, styles.beetleSheet, {
+            width: BEETLE_FRAME * (defeated ? BEETLE_DEFEATED_FRAMES : 4),
+            left: -frame * BEETLE_FRAME,
+          }]} /></View>;
         })}
         <View testID="kuro" style={[styles.catFrame, { left: CAT.x, top: world.y + CAT_VISUAL_Y_OFFSET,
           transform: [{ rotate: world.grounded ? '0deg' : world.vy > 0 ? '12deg' : '-8deg' }],
@@ -299,7 +304,7 @@ const styles = StyleSheet.create({
   facadeWindowLit: { backgroundColor: '#e6b65d', borderColor: '#7d5e48', opacity: 0.82 },
   catFrame: { position: 'absolute', width: CAT.width, height: CAT.height, overflow: 'hidden' },
   beetleFrame: { position: 'absolute', width: BEETLE_FRAME, height: BEETLE_FRAME, overflow: 'hidden', zIndex: 6 },
-  beetleSheet: { position: 'absolute', width: BEETLE_FRAME * 4, height: BEETLE_FRAME },
+  beetleSheet: { position: 'absolute', height: BEETLE_FRAME },
   catSheet: { position: 'absolute', width: CAT.width * 4, height: CAT.height },
   star: { position: 'absolute', color: '#ffdc85', fontSize: 22, lineHeight: 24, textShadowColor: '#bc7834', textShadowRadius: 7 },
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, padding: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
