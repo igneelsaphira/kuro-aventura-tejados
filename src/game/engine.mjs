@@ -7,6 +7,8 @@ const JUMP = -370;
 const STOMP_BOUNCE = -285;
 const DEFEATED_HOLD_TIME = 0.34;
 const DEFEATED_FALL_GRAVITY = 520;
+const HIT_BOUNCE = -220;
+const HIT_INVULNERABILITY = 1.15;
 
 export function configFor(width, height) {
   const scale = Math.min(width / 390, height / 420);
@@ -34,7 +36,7 @@ function extendWorld(world, config) {
 }
 
 export function createWorld(config, status = 'start', night = 1) {
-  return extendWorld({ status, night, mission: { id: 'distance', target: FIRST_MISSION_DISTANCE + (night - 1) * 100, completed: false }, time: 0, scroll: 0, distance: 0, stars: 0,
+  return extendWorld({ status, night, mission: { id: 'distance', target: FIRST_MISSION_DISTANCE + (night - 1) * 100, completed: false }, time: 0, scroll: 0, distance: 0, stars: 0, hearts: 3, invulnerable: 0,
     y: config.ground - CAT.height, vy: 0, grounded: true, jumps: 0,
     coyote: 0.1, buffer: 0, roofs: [{ id: 0, x: -80, width: 450, y: config.ground }],
     collectibles: [], obstacles: [], reason: null }, config);
@@ -85,7 +87,10 @@ export function tick(world, config, dt = STEP) {
   const wall = roofs.some((roof) => foot >= roof.x && foot <= roof.x + roof.width &&
     oldBottom > roof.y + 4 && world.y < config.height);
   let obstacles = world.obstacles.map((obstacle) => {
-    const moved = { ...obstacle, x: obstacle.x - travel };
+    // A stomped beetle lingers near the impact point so its defeat animation
+    // remains readable instead of being carried off-screen by the camera.
+    const obstacleTravel = obstacle.state === 'defeated' ? travel * 0.12 : travel;
+    const moved = { ...obstacle, x: obstacle.x - obstacleTravel };
     if (obstacle.state !== 'defeated') return moved;
     const defeatAge = Math.max(0, world.time - obstacle.defeatedAt);
     if (defeatAge < DEFEATED_HOLD_TIME) return { ...moved, fallVy: 0 };
@@ -95,7 +100,8 @@ export function tick(world, config, dt = STEP) {
 
   const overlapsHorizontally = (obstacle) =>
     CAT.x + CAT.width - 8 > obstacle.x && CAT.x + 8 < obstacle.x + obstacle.width;
-  const stomped = obstacles.find((obstacle) => obstacle.state !== 'defeated' &&
+  const isDangerous = (obstacle) => obstacle.state !== 'defeated' && obstacle.state !== 'passed';
+  const stomped = obstacles.find((obstacle) => isDangerous(obstacle) &&
     overlapsHorizontally(obstacle) && vy > 0 && oldBottom <= obstacle.y + 9 &&
     y + CAT.height >= obstacle.y && y + CAT.height <= obstacle.y + obstacle.height * 0.55
   );
@@ -109,11 +115,28 @@ export function tick(world, config, dt = STEP) {
     jumps = 1;
     coyote = 0;
   }
-  const hitObstacle = obstacles.some((obstacle) => obstacle.state !== 'defeated' &&
+  let hearts = world.hearts ?? 3;
+  let invulnerable = Math.max(0, (world.invulnerable ?? 0) - dt);
+  const hitObstacle = invulnerable <= 0 ? obstacles.find((obstacle) => isDangerous(obstacle) &&
     overlapsHorizontally(obstacle) &&
     y + CAT.height - 6 > obstacle.y && y + 8 < obstacle.y + obstacle.height
-  );
-  const status = hitObstacle || y > config.height + CAT.height ? 'ended' : 'playing';
+  ) : null;
+  if (hitObstacle) {
+    hearts = Math.max(0, hearts - 1);
+    invulnerable = HIT_INVULNERABILITY;
+    // Keep the beetle visible behind Kuro, but make it harmless after contact.
+    obstacles = obstacles.map((obstacle) => obstacle.id === hitObstacle.id
+      ? { ...obstacle, state: 'passed', hitAt: world.time + dt }
+      : obstacle);
+    if (hearts > 0) {
+      vy = HIT_BOUNCE;
+      grounded = false;
+      jumps = Math.max(1, jumps);
+      coyote = 0;
+    }
+  }
+  const fell = y > config.height + CAT.height;
+  const status = fell || hearts === 0 ? 'ended' : 'playing';
   let stars = world.stars;
   const distance = world.distance + travel * 0.08;
   const collectibles = world.collectibles.map((star) => ({ ...star, x: star.x - travel }))
@@ -126,9 +149,9 @@ export function tick(world, config, dt = STEP) {
       return true;
     });
   let next = extendWorld({ ...world, time: world.time + dt, scroll: world.scroll + travel,
-    distance, mission: { ...world.mission, completed: world.mission.completed || distance >= world.mission.target }, stars, y, vy, grounded, jumps, coyote,
+    distance, mission: { ...world.mission, completed: world.mission.completed || distance >= world.mission.target }, stars, hearts, invulnerable, y, vy, grounded, jumps, coyote,
     buffer: Math.max(0, world.buffer - dt), roofs, collectibles, obstacles, status,
-    reason: status === 'ended' ? (hitObstacle ? 'obstacle' : 'fall') : world.reason }, config);
+    reason: status === 'ended' ? (fell ? 'fall' : 'obstacle') : null }, config);
   if (wall) next = { ...next, jumps: 2, coyote: 0 };
   if (grounded && next.buffer > 0) next = jump(next);
   return next;
