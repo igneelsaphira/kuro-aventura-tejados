@@ -6,6 +6,10 @@ const CAT_RUN_SHEET = require('../../assets/kuro/kuro-run.png');
 const CAT_JUMP_SHEET = require('../../assets/kuro/kuro-jump.png');
 const SKYLINE = require('../../assets/kuro/santiago-skyline.png');
 const URBAN_DETAIL = require('../../assets/kuro/santiago-urban-depth-cutout.png');
+const VALPARAISO_BACKGROUND = require('../../assets/kuro/background-valparaiso.png');
+const PALAFITOS_BACKGROUND = require('../../assets/kuro/background-palafitos.png');
+const VALPARAISO_PLATFORM = require('../../assets/kuro/platform-valparaiso.png');
+const PALAFITOS_PLATFORM = require('../../assets/kuro/platform-palafitos.png');
 const ROOFS = require('../../assets/kuro/rooftop-segments.png');
 const BEETLE_SHEET = require('../../bichito.png');
 const BEETLE_DEFEATED_SHEET = require('../../assets/kuro/bichito-defeated-v2.png');
@@ -36,6 +40,11 @@ const FACADE_WINDOWS = [
   { x: 0.55, y: 0.54, lit: false },
   { x: 0.79, y: 0.46, lit: false },
 ];
+const NIGHT_BACKGROUNDS = [
+  { key: 'santiago', label: 'SANTIAGO' },
+  { key: 'valparaiso', label: 'VALPARAÍSO', source: VALPARAISO_BACKGROUND, aspect: 1774 / 887, speed: 0.12, platform: VALPARAISO_PLATFORM, platformTop: 177 },
+  { key: 'palafitos', label: 'PALAFITOS · CHILOÉ', source: PALAFITOS_BACKGROUND, aspect: 2172 / 724, speed: 0.1, platform: PALAFITOS_PLATFORM, platformTop: 148 },
+];
 
 function catSpriteFor(world) {
   if (world.grounded) {
@@ -47,7 +56,7 @@ function catSpriteFor(world) {
   return { sheet: CAT_JUMP_SHEET, frame: 3 };
 }
 
-function Building({ roof, height }) {
+function Building({ roof, height, theme }) {
   // The source artwork has unevenly spaced buildings. Crop the flat tile roof
   // by its actual pixel rectangle instead of dividing the sheet into quarters.
   const sx = roof.width / 362;
@@ -56,6 +65,24 @@ function Building({ roof, height }) {
   const facadeTop = 154;
   const facadeHeight = Math.max(0, buildingHeight - facadeTop);
   const facadeInset = Math.min(14, Math.max(8, roof.width * 0.035));
+  if (theme.platform) {
+    const artHeight = 260;
+    const artWidth = artHeight * 3;
+    const availableCrop = Math.max(1, artWidth - roof.width);
+    const palafito = theme.key === 'palafitos';
+    return (
+      <View testID={`roof-${roof.id}`} style={[styles.building, { left: roof.x, top: roof.y, width: roof.width, height: buildingHeight }]}>
+        <Image source={theme.platform} resizeMode="stretch" style={[PIXELS, {
+          position: 'absolute', width: artWidth, height: artHeight,
+          left: -((roof.id * 137) % availableCrop),
+          top: -(theme.platformTop / 724) * artHeight,
+        }]} />
+        <View style={[styles.platformLip, palafito ? styles.palafitoLip : styles.valparaisoLip]} />
+        <View style={[styles.platformEdge, styles.platformEdgeLeft, palafito ? styles.palafitoEdge : styles.valparaisoEdge]} />
+        <View style={[styles.platformEdge, styles.platformEdgeRight, palafito ? styles.palafitoEdge : styles.valparaisoEdge]} />
+      </View>
+    );
+  }
   return (
     <View testID={`roof-${roof.id}`} style={[styles.building, { left: roof.x, top: roof.y, width: roof.width, height: buildingHeight }]}>
       <View style={[styles.facade, { left: facadeInset, right: facadeInset, top: facadeTop }]} />
@@ -98,6 +125,22 @@ function Building({ roof, height }) {
       </View>
     </View>
   );
+}
+
+function PanoramaLayer({ source, aspect, viewportWidth, height, top = 0, travel }) {
+  const tileWidth = height * aspect;
+  const phase = travel % tileWidth;
+  const cycle = Math.floor(travel / tileWidth);
+  const tileCount = Math.ceil(viewportWidth / tileWidth) + 3;
+  return Array.from({ length: tileCount }, (_, index) => {
+    const tile = index - 1;
+    return <View key={`panorama-${tile}`} style={{
+      position: 'absolute', left: tile * tileWidth - phase - 1, top,
+      width: tileWidth + 2, height,
+      overflow: 'hidden',
+      transform: [{ scaleX: (cycle + tile) % 2 === 0 ? 1 : -1 }],
+    }}><Image source={source} resizeMode="stretch" style={[StyleSheet.absoluteFillObject, PIXELS, { width: tileWidth + 2, height }]} /></View>;
+  });
 }
 
 export default function RooftopAdventureGame() {
@@ -181,6 +224,7 @@ export default function RooftopAdventureGame() {
   const compact = size.height < 430;
   const narrow = size.width < 430;
   const isPlaying = world.status === 'playing';
+  const background = NIGHT_BACKGROUNDS[(world.night - 1) % NIGHT_BACKGROUNDS.length];
   const catSprite = catSpriteFor(world);
   const skylineOffset = -(world.scroll * 0.18 % 600);
   // Keep the artwork proportional while covering the entire space below the roofs.
@@ -207,6 +251,13 @@ export default function RooftopAdventureGame() {
           position: 'absolute', left: 0, right: 0, top: config.ground - 250 + i * 5,
           height: 6, backgroundColor,
         }} />)}
+        {background.source ? <PanoramaLayer
+          source={background.source}
+          aspect={background.aspect}
+          viewportWidth={config.width}
+          height={config.height}
+          travel={world.scroll * background.speed}
+        /> : null}
         {SKY_STARS.map((star, i) => <View key={i} style={[styles.skyStar, {
           left: ((star.x - world.scroll * 0.03) % config.width + config.width) % config.width,
           top: star.y * config.ground / 300, width: star.size, height: star.size, opacity: i % 3 === 0 ? 0.45 : 0.8,
@@ -227,19 +278,22 @@ export default function RooftopAdventureGame() {
             }]} />
           </View>
         </View>
-        {Array.from({ length: Math.ceil(config.width / 600) + 1 }, (_, i) => <Image key={i} source={SKYLINE} resizeMode="stretch" style={[styles.skyline, PIXELS, { left: skylineOffset + i * 600, top: config.ground - 145 }]} />)}
+        {background.key === 'santiago' ? Array.from({ length: Math.ceil(config.width / 600) + 1 }, (_, i) => <Image key={i} source={SKYLINE} resizeMode="stretch" style={[styles.skyline, PIXELS, { left: skylineOffset + i * 600, top: config.ground - 145 }]} />) : null}
         {/* Opaque city silhouettes conceal the skyline's flat base.
             Reflected tiles keep adjoining edges continuous during scrolling. */}
-        {Array.from({ length: Math.ceil(config.width / urbanDepthWidth) + 1 }, (_, i) => (
+        {background.key === 'santiago' ? Array.from({ length: Math.ceil(config.width / urbanDepthWidth) + 3 }, (_, index) => {
+          const i = index - 1;
+          return (
           <View key={i} style={[styles.urbanDepth, {
-            left: urbanDepthOffset + i * urbanDepthWidth, top: urbanDepthTop,
-            width: urbanDepthWidth, height: urbanDepthHeight,
+            left: urbanDepthOffset + i * urbanDepthWidth - 1, top: urbanDepthTop,
+            width: urbanDepthWidth + 2, height: urbanDepthHeight,
             transform: [{ scaleX: (urbanDepthTile + i) % 2 === 0 ? 1 : -1 }],
           }]}>
-            <Image source={URBAN_DETAIL} resizeMode="stretch" style={[StyleSheet.absoluteFillObject, PIXELS, { width: urbanDepthWidth, height: urbanDepthHeight }]} />
+            <Image source={URBAN_DETAIL} resizeMode="stretch" style={[StyleSheet.absoluteFillObject, PIXELS, { width: urbanDepthWidth + 2, height: urbanDepthHeight }]} />
           </View>
-        ))}
-        {world.roofs.map((roof) => <Building key={roof.id} roof={roof} height={config.height} />)}
+          );
+        }) : null}
+        {world.roofs.map((roof) => <Building key={roof.id} roof={roof} height={config.height} theme={background} />)}
         {world.collectibles.map((star) => <Text key={star.id} style={[styles.star, { left: star.x, top: star.y }]}>✦</Text>)}
         {world.obstacles.map((obstacle) => {
           const defeated = obstacle.state === 'defeated';
@@ -269,7 +323,7 @@ export default function RooftopAdventureGame() {
       <View style={[styles.topBar, narrow && { padding: 14 }]} pointerEvents="box-none">
         <View pointerEvents="none">
           <Text style={[styles.brand, narrow && { fontSize: 18 }]}>KURO <Text style={styles.brandAccent}>✦</Text></Text>
-          <Text style={styles.location}>NOCHE {world.night} · SANTIAGO · DE NOCHE</Text>
+          <Text style={styles.location}>NOCHE {world.night} · {background.label} · DE NOCHE</Text>
           <View
             accessibilityLabel={`${world.hearts} vidas`}
             style={[styles.heartsRow, narrow && styles.heartsRowCompact]}
@@ -324,6 +378,14 @@ const styles = StyleSheet.create({
   facadeLine: { position: 'absolute', top: 152, bottom: 0, width: 2, backgroundColor: 'rgba(10,12,27,0.22)' },
   facadeWindow: { position: 'absolute', width: 22, height: 16, backgroundColor: '#101329', borderWidth: 2, borderColor: 'rgba(55,48,73,0.8)' },
   facadeWindowLit: { backgroundColor: '#e6b65d', borderColor: '#7d5e48', opacity: 0.82 },
+  platformLip: { position: 'absolute', left: 0, right: 0, top: 0, height: 5, borderBottomWidth: 2 },
+  valparaisoLip: { backgroundColor: '#53617a', borderBottomColor: '#12192c' },
+  palafitoLip: { height: 7, backgroundColor: '#8f6947', borderBottomColor: '#21192b' },
+  platformEdge: { position: 'absolute', top: 0, bottom: 0, borderColor: 'rgba(10,12,25,0.72)' },
+  platformEdgeLeft: { left: 0, borderRightWidth: 2 },
+  platformEdgeRight: { right: 0, borderLeftWidth: 2 },
+  valparaisoEdge: { width: 8, backgroundColor: '#27344c' },
+  palafitoEdge: { width: 12, backgroundColor: '#46324a', borderColor: '#171526' },
   catFrame: { position: 'absolute', width: CAT.width, height: CAT.height, overflow: 'hidden' },
   beetleFrame: { position: 'absolute', width: BEETLE_FRAME, height: BEETLE_FRAME, overflow: 'hidden', zIndex: 6 },
   beetleSheet: { position: 'absolute', height: BEETLE_FRAME },
