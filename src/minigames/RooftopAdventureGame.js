@@ -8,6 +8,7 @@ const SKYLINE = require('../../assets/kuro/santiago-skyline.png');
 const URBAN_DETAIL = require('../../assets/kuro/santiago-urban-depth-cutout.png');
 const ROOFS = require('../../assets/kuro/rooftop-segments.png');
 const BEETLE_SHEET = require('../../bichito.png');
+const BEETLE_DEFEATED_SHEET = require('../../assets/kuro/bichito-defeated.png');
 const PIXELS = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : {};
 const BEETLE_FRAME = 64;
 // The sprite includes a few transparent pixels below Kuro's paws. Lower only
@@ -237,7 +238,17 @@ export default function RooftopAdventureGame() {
         ))}
         {world.roofs.map((roof) => <Building key={roof.id} roof={roof} height={config.height} />)}
         {world.collectibles.map((star) => <Text key={star.id} style={[styles.star, { left: star.x, top: star.y }]}>✦</Text>)}
-        {world.obstacles.map((obstacle) => { const frame = Math.floor(world.time * 5) % 4; return <View key={obstacle.id} testID={obstacle.id} style={[styles.beetleFrame, { left: obstacle.x - 6, top: obstacle.y - 10 }]}><Image source={BEETLE_SHEET} resizeMode="stretch" style={[PIXELS, styles.beetleSheet, { left: -frame * BEETLE_FRAME }]} /></View>; })}
+        {world.obstacles.map((obstacle) => {
+          const defeated = obstacle.state === 'defeated';
+          const frame = defeated
+            ? Math.min(3, Math.floor((world.time - obstacle.defeatedAt) * 9))
+            : Math.floor(world.time * 5) % 4;
+          return <View key={obstacle.id} testID={obstacle.id} style={[styles.beetleFrame, {
+            left: obstacle.x - 6,
+            top: obstacle.y - 10,
+            transform: [{ rotate: defeated && frame >= 2 ? `${(frame - 1) * 9}deg` : '0deg' }],
+          }]}><Image source={defeated ? BEETLE_DEFEATED_SHEET : BEETLE_SHEET} resizeMode="stretch" style={[PIXELS, styles.beetleSheet, { left: -frame * BEETLE_FRAME }]} /></View>;
+        })}
         <View testID="kuro" style={[styles.catFrame, { left: CAT.x, top: world.y + CAT_VISUAL_Y_OFFSET,
           transform: [{ rotate: world.grounded ? '0deg' : world.vy > 0 ? '12deg' : '-8deg' }],
         }]}>
