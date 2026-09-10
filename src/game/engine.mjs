@@ -5,7 +5,8 @@ export const BEETLE = { width: 52, height: 44 };
 const GRAVITY = 1050;
 const JUMP = -370;
 const STOMP_BOUNCE = -285;
-const DEFEATED_FALL_GRAVITY = 760;
+const DEFEATED_HOLD_TIME = 0.34;
+const DEFEATED_FALL_GRAVITY = 520;
 
 export function configFor(width, height) {
   const scale = Math.min(width / 390, height / 420);
@@ -86,7 +87,9 @@ export function tick(world, config, dt = STEP) {
   let obstacles = world.obstacles.map((obstacle) => {
     const moved = { ...obstacle, x: obstacle.x - travel };
     if (obstacle.state !== 'defeated') return moved;
-    const fallVy = Math.min(560, (obstacle.fallVy ?? 80) + DEFEATED_FALL_GRAVITY * dt);
+    const defeatAge = Math.max(0, world.time - obstacle.defeatedAt);
+    if (defeatAge < DEFEATED_HOLD_TIME) return { ...moved, fallVy: 0 };
+    const fallVy = Math.min(420, (obstacle.fallVy ?? 0) + DEFEATED_FALL_GRAVITY * dt);
     return { ...moved, y: obstacle.y + fallVy * dt, fallVy };
   }).filter((obstacle) => obstacle.x + obstacle.width > -80 && obstacle.y < config.height + 120);
 
@@ -98,7 +101,7 @@ export function tick(world, config, dt = STEP) {
   );
   if (stomped) {
     obstacles = obstacles.map((obstacle) => obstacle.id === stomped.id
-      ? { ...obstacle, state: 'defeated', defeatedAt: world.time + dt, fallVy: 70 }
+      ? { ...obstacle, state: 'defeated', defeatedAt: world.time + dt, fallVy: 0 }
       : obstacle);
     y = stomped.y - CAT.height;
     vy = STOMP_BOUNCE;
