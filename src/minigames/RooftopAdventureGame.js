@@ -240,13 +240,14 @@ export default function RooftopAdventureGame() {
         {world.collectibles.map((star) => <Text key={star.id} style={[styles.star, { left: star.x, top: star.y }]}>✦</Text>)}
         {world.obstacles.map((obstacle) => {
           const defeated = obstacle.state === 'defeated';
+          const defeatAge = defeated ? Math.max(0, world.time - obstacle.defeatedAt) : 0;
           const frame = defeated
-            ? Math.min(3, Math.floor((world.time - obstacle.defeatedAt) * 9))
+            ? Math.min(3, Math.floor(defeatAge / 0.18))
             : Math.floor(world.time * 5) % 4;
           return <View key={obstacle.id} testID={obstacle.id} style={[styles.beetleFrame, {
             left: obstacle.x - 6,
             top: obstacle.y - 10,
-            transform: [{ rotate: defeated && frame >= 2 ? `${(frame - 1) * 9}deg` : '0deg' }],
+            transform: [{ rotate: defeated && frame >= 2 ? `${(frame - 1) * 12}deg` : '0deg' }],
           }]}><Image source={defeated ? BEETLE_DEFEATED_SHEET : BEETLE_SHEET} resizeMode="stretch" style={[PIXELS, styles.beetleSheet, { left: -frame * BEETLE_FRAME }]} /></View>;
         })}
         <View testID="kuro" style={[styles.catFrame, { left: CAT.x, top: world.y + CAT_VISUAL_Y_OFFSET,
