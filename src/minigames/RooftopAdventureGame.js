@@ -55,14 +55,14 @@ function catSpriteFor(world) {
     const landingAge = world.landedAt == null ? Infinity : world.time - world.landedAt;
     // The last jump frame and first run frame are both crouched poses. Holding
     // that bridge briefly prevents a one-frame flash when the image sheet swaps.
-    if (landingAge < LANDING_POSE_TIME) return { sheet: CAT_JUMP_SHEET, frame: 3 };
+    if (landingAge < LANDING_POSE_TIME) return { kind: 'jump', frame: 3 };
     const runTime = Number.isFinite(landingAge) ? landingAge - LANDING_POSE_TIME : world.time;
-    return { sheet: CAT_RUN_SHEET, frame: Math.floor(Math.max(0, runTime) * 10) % 4 };
+    return { kind: 'run', frame: Math.floor(Math.max(0, runTime) * 10) % 4 };
   }
-  if (world.vy <= JUMP_TAKEOFF_VY) return { sheet: CAT_JUMP_SHEET, frame: 0 };
-  if (world.vy < -JUMP_APEX_VY) return { sheet: CAT_JUMP_SHEET, frame: 1 };
-  if (world.vy <= JUMP_APEX_VY) return { sheet: CAT_JUMP_SHEET, frame: 2 };
-  return { sheet: CAT_JUMP_SHEET, frame: 3 };
+  if (world.vy <= JUMP_TAKEOFF_VY) return { kind: 'jump', frame: 0 };
+  if (world.vy < -JUMP_APEX_VY) return { kind: 'jump', frame: 1 };
+  if (world.vy <= JUMP_APEX_VY) return { kind: 'jump', frame: 2 };
+  return { kind: 'jump', frame: 3 };
 }
 
 function Building({ roof, height, theme }) {
@@ -330,7 +330,16 @@ export default function RooftopAdventureGame() {
           opacity: world.invulnerable > 0 && Math.floor(world.invulnerable * 14) % 2 === 0 ? 0.3 : 1,
           transform: [{ rotate: world.grounded ? '0deg' : world.vy > 0 ? '12deg' : '-8deg' }],
         }]}>
-          <Image source={catSprite.sheet} resizeMode="stretch" style={[PIXELS, styles.catSheet, { left: -catSprite.frame * CAT.width }]} />
+          {/* Keep both sheets mounted so landing never swaps an image source
+              through a transparent browser paint. */}
+          <Image source={CAT_RUN_SHEET} resizeMode="stretch" style={[PIXELS, styles.catSheet, {
+            left: -(catSprite.kind === 'run' ? catSprite.frame : 0) * CAT.width,
+            opacity: catSprite.kind === 'run' ? 1 : 0,
+          }]} />
+          <Image source={CAT_JUMP_SHEET} resizeMode="stretch" style={[PIXELS, styles.catSheet, {
+            left: -(catSprite.kind === 'jump' ? catSprite.frame : 0) * CAT.width,
+            opacity: catSprite.kind === 'jump' ? 1 : 0,
+          }]} />
         </View>
       </View>
 
