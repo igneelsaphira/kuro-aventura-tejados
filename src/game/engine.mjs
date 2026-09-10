@@ -37,7 +37,7 @@ function extendWorld(world, config) {
 
 export function createWorld(config, status = 'start', night = 1) {
   return extendWorld({ status, night, mission: { id: 'distance', target: FIRST_MISSION_DISTANCE + (night - 1) * 100, completed: false }, time: 0, scroll: 0, distance: 0, stars: 0, hearts: 3, invulnerable: 0,
-    y: config.ground - CAT.height, vy: 0, grounded: true, jumps: 0,
+    y: config.ground - CAT.height, vy: 0, grounded: true, landedAt: null, jumps: 0,
     coyote: 0.1, buffer: 0, roofs: [{ id: 0, x: -80, width: 450, y: config.ground }],
     collectibles: [], obstacles: [], reason: null }, config);
 }
@@ -149,7 +149,8 @@ export function tick(world, config, dt = STEP) {
       return true;
     });
   let next = extendWorld({ ...world, time: world.time + dt, scroll: world.scroll + travel,
-    distance, mission: { ...world.mission, completed: world.mission.completed || distance >= world.mission.target }, stars, hearts, invulnerable, y, vy, grounded, jumps, coyote,
+    distance, mission: { ...world.mission, completed: world.mission.completed || distance >= world.mission.target }, stars, hearts, invulnerable, y, vy, grounded,
+    landedAt: grounded && !world.grounded ? world.time + dt : world.landedAt, jumps, coyote,
     buffer: Math.max(0, world.buffer - dt), roofs, collectibles, obstacles, status,
     reason: status === 'ended' ? (fell ? 'fall' : 'obstacle') : null }, config);
   if (wall) next = { ...next, jumps: 2, coyote: 0 };

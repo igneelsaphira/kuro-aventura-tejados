@@ -29,6 +29,7 @@ const MOON_SCALE = 31 / MOON_CROP.width;
 const SKY_STARS = Array.from({ length: 36 }, (_, i) => ({ x: (i * 137.3) % 1000, y: 25 + (i * 47 % 180), size: i % 4 === 0 ? 2 : 1 }));
 const JUMP_TAKEOFF_VY = -310;
 const JUMP_APEX_VY = 70;
+const LANDING_POSE_TIME = 0.08;
 const HORIZON_STEPS = Array.from({ length: 32 }, (_, i) => {
   const mix = (i + 1) / 32;
   return `rgb(${Math.round(17 + 24 * mix)},${Math.round(24 + 11 * mix)},${Math.round(49 + 16 * mix)})`;
@@ -51,7 +52,12 @@ const NIGHT_BACKGROUNDS = [
 
 function catSpriteFor(world) {
   if (world.grounded) {
-    return { sheet: CAT_RUN_SHEET, frame: Math.floor(world.time * 10) % 4 };
+    const landingAge = world.landedAt == null ? Infinity : world.time - world.landedAt;
+    // The last jump frame and first run frame are both crouched poses. Holding
+    // that bridge briefly prevents a one-frame flash when the image sheet swaps.
+    if (landingAge < LANDING_POSE_TIME) return { sheet: CAT_JUMP_SHEET, frame: 3 };
+    const runTime = Number.isFinite(landingAge) ? landingAge - LANDING_POSE_TIME : world.time;
+    return { sheet: CAT_RUN_SHEET, frame: Math.floor(Math.max(0, runTime) * 10) % 4 };
   }
   if (world.vy <= JUMP_TAKEOFF_VY) return { sheet: CAT_JUMP_SHEET, frame: 0 };
   if (world.vy < -JUMP_APEX_VY) return { sheet: CAT_JUMP_SHEET, frame: 1 };
