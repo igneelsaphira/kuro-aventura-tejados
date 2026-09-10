@@ -112,13 +112,31 @@ test('the first mission completes after reaching its distance target', () => {
   assert.equal(world.mission.completed, true);
 });
 
-test('touching a beetle ends the run as an obstacle collision', () => {
+test('touching a beetle costs one heart and leaves it harmlessly behind', () => {
   let world = createWorld(config, 'playing', 1);
   world = {
     ...world,
     obstacles: [{ id: 'beetle-test', x: CAT.x + 10, y: world.y, width: 52, height: 44 }],
   };
   world = tick(world, config);
+  assert.equal(world.status, 'playing');
+  assert.equal(world.hearts, 2);
+  assert.equal(world.obstacles[0].state, 'passed');
+  assert.ok(world.invulnerable > 1);
+  world = advance(world, 4);
+  assert.equal(world.hearts, 2, 'the same beetle must not deal repeated damage');
+  assert.ok(world.obstacles[0].x < CAT.x, 'the harmless beetle should remain behind Kuro');
+});
+
+test('losing the final heart ends the run', () => {
+  let world = createWorld(config, 'playing', 1);
+  world = {
+    ...world,
+    hearts: 1,
+    obstacles: [{ id: 'beetle-final-heart', x: CAT.x + 10, y: world.y, width: 52, height: 44 }],
+  };
+  world = tick(world, config);
+  assert.equal(world.hearts, 0);
   assert.equal(world.status, 'ended');
   assert.equal(world.reason, 'obstacle');
 });
@@ -137,12 +155,15 @@ test('landing on a beetle defeats it, bounces Kuro, and makes it fall', () => {
 
   world = tick(world, config, STEP);
   assert.equal(world.status, 'playing');
+  assert.equal(world.hearts, 3, 'a successful stomp should not cost a heart');
   assert.ok(world.vy < 0, 'stomping should bounce Kuro upward');
   assert.equal(world.obstacles[0].state, 'defeated');
 
   const defeatedY = world.obstacles[0].y;
+  const defeatedX = world.obstacles[0].x;
   world = advance(world, 12);
   assert.equal(world.obstacles[0].y, defeatedY, 'the squashed pose should remain visible briefly');
+  assert.ok(defeatedX - world.obstacles[0].x < 8, 'the defeated beetle should linger near the impact');
   world = advance(world, 24);
   assert.ok(world.obstacles[0].y > defeatedY, 'the defeated beetle should fall downward');
   assert.equal(world.status, 'playing');
