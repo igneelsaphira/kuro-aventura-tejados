@@ -226,7 +226,6 @@ export default function RooftopAdventureGame() {
   const isPlaying = world.status === 'playing';
   const background = NIGHT_BACKGROUNDS[(world.night - 1) % NIGHT_BACKGROUNDS.length];
   const catSprite = catSpriteFor(world);
-  const skylineOffset = -(world.scroll * 0.18 % 600);
   // Keep the artwork proportional while covering the entire space below the roofs.
   const urbanDepthTop = config.ground - 140;
   const urbanDepthHeight = Math.max(280, config.height - urbanDepthTop + 8);
@@ -278,7 +277,14 @@ export default function RooftopAdventureGame() {
             }]} />
           </View>
         </View>
-        {background.key === 'santiago' ? Array.from({ length: Math.ceil(config.width / 600) + 1 }, (_, i) => <Image key={i} source={SKYLINE} resizeMode="stretch" style={[styles.skyline, PIXELS, { left: skylineOffset + i * 600, top: config.ground - 145 }]} />) : null}
+        {background.key === 'santiago' ? <PanoramaLayer
+          source={SKYLINE}
+          aspect={2172 / 423}
+          viewportWidth={config.width}
+          height={150}
+          top={config.ground - 145}
+          travel={world.scroll * 0.18}
+        /> : null}
         {/* Opaque city silhouettes conceal the skyline's flat base.
             Reflected tiles keep adjoining edges continuous during scrolling. */}
         {background.key === 'santiago' ? Array.from({ length: Math.ceil(config.width / urbanDepthWidth) + 3 }, (_, index) => {
@@ -370,7 +376,6 @@ const styles = StyleSheet.create({
   skyStar: { position: 'absolute', backgroundColor: '#ffdc9a' },
   moonGlow: { position: 'absolute', width: 75, height: 75, alignItems: 'center', justifyContent: 'center' },
   moon: { width: 31, height: 31, borderRadius: 15.5, overflow: 'hidden' },
-  skyline: { position: 'absolute', width: 600, height: 150, opacity: 1 },
   urbanDepth: { position: 'absolute', opacity: 1 },
   building: { position: 'absolute', overflow: 'hidden' },
   facade: { position: 'absolute', bottom: 0, backgroundColor: '#1d2038', borderLeftWidth: 2, borderRightWidth: 2, borderColor: 'rgba(56,48,71,0.58)' },
