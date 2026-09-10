@@ -141,7 +141,9 @@ test('landing on a beetle defeats it, bounces Kuro, and makes it fall', () => {
   assert.equal(world.obstacles[0].state, 'defeated');
 
   const defeatedY = world.obstacles[0].y;
-  world = advance(world, 8);
+  world = advance(world, 12);
+  assert.equal(world.obstacles[0].y, defeatedY, 'the squashed pose should remain visible briefly');
+  world = advance(world, 24);
   assert.ok(world.obstacles[0].y > defeatedY, 'the defeated beetle should fall downward');
   assert.equal(world.status, 'playing');
 });
