@@ -179,7 +179,7 @@ export default function RooftopAdventureGame() {
   }, [doJump, pause, publish, start]);
 
   const compact = size.height < 430;
-  const narrow = size.width < 360;
+  const narrow = size.width < 430;
   const isPlaying = world.status === 'playing';
   const catSprite = catSpriteFor(world);
   const skylineOffset = -(world.scroll * 0.18 % 600);
@@ -256,6 +256,7 @@ export default function RooftopAdventureGame() {
           }]} /></View>;
         })}
         <View testID="kuro" style={[styles.catFrame, { left: CAT.x, top: world.y + CAT_VISUAL_Y_OFFSET,
+          opacity: world.invulnerable > 0 && Math.floor(world.invulnerable * 14) % 2 === 0 ? 0.3 : 1,
           transform: [{ rotate: world.grounded ? '0deg' : world.vy > 0 ? '12deg' : '-8deg' }],
         }]}>
           <Image source={catSprite.sheet} resizeMode="stretch" style={[PIXELS, styles.catSheet, { left: -catSprite.frame * CAT.width }]} />
@@ -265,9 +266,10 @@ export default function RooftopAdventureGame() {
       {isPlaying ? <Pressable testID="jump-surface" accessibilityLabel="Saltar" style={StyleSheet.absoluteFill} onPressIn={doJump} /> : null}
       <View style={[styles.topBar, narrow && { padding: 14 }]} pointerEvents="box-none">
         <View pointerEvents="none"><Text style={[styles.brand, narrow && { fontSize: 18 }]}>KURO <Text style={styles.brandAccent}>✦</Text></Text><Text style={styles.location}>NOCHE {world.night} · SANTIAGO · DE NOCHE</Text></View>
-        <View style={styles.stats} pointerEvents="box-none">
-          <View style={styles.stat} pointerEvents="none"><Text style={styles.statText}>{Math.floor(world.distance)} m</Text></View>
-          <View style={styles.stat} pointerEvents="none"><Text style={styles.starCount}>✦ {world.stars}</Text></View>
+        <View style={[styles.stats, narrow && { gap: 4 }]} pointerEvents="box-none">
+          <View style={[styles.stat, narrow && styles.statCompact]} pointerEvents="none" accessibilityLabel={`${world.hearts} vidas`}><Text style={[styles.hearts, narrow && { fontSize: 13 }]}>{'♥'.repeat(world.hearts)}<Text style={styles.emptyHearts}>{'♡'.repeat(3 - world.hearts)}</Text></Text></View>
+          <View style={[styles.stat, narrow && styles.statCompact]} pointerEvents="none"><Text style={styles.statText}>{Math.floor(world.distance)} m</Text></View>
+          <View style={[styles.stat, narrow && styles.statCompact]} pointerEvents="none"><Text style={styles.starCount}>✦ {world.stars}</Text></View>
           {isPlaying || world.status === 'paused' ? <Pressable accessibilityRole="button" accessibilityLabel={isPlaying ? 'Pausar' : 'Continuar'} onPress={pause} style={styles.pause}><Text style={styles.pauseText}>{isPlaying ? 'Ⅱ' : '▶'}</Text></Pressable> : null}
         </View>
       </View>
@@ -313,8 +315,11 @@ const styles = StyleSheet.create({
   location: { color: '#a3a5bc', fontSize: 8, letterSpacing: 1.5, marginTop: 4 },
   stats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stat: { borderRadius: 22, backgroundColor: 'rgba(9,12,29,0.6)', paddingHorizontal: 14, paddingVertical: 11 },
+  statCompact: { paddingHorizontal: 9, paddingVertical: 9 },
   statText: { color: '#f7f0e2', fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] },
   starCount: { color: '#ffdc85', fontWeight: '800', fontSize: 14 },
+  hearts: { color: '#ef7284', fontWeight: '900', fontSize: 15, letterSpacing: 2 },
+  emptyHearts: { color: '#70647b' },
   pause: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#292c43', alignItems: 'center', justifyContent: 'center' },
   pauseText: { color: '#f9e9ce', fontSize: 18, fontWeight: '800' },
   bottomBar: { position: 'absolute', bottom: 18, left: 22, right: 22, flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
