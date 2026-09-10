@@ -16,6 +16,9 @@ const BEETLE_DEFEATED_SHEET = require('../../assets/kuro/bichito-defeated-v2.png
 const PIXELS = Platform.OS === 'web' ? { imageRendering: 'pixelated' } : {};
 const BEETLE_FRAME = 64;
 const BEETLE_DEFEATED_FRAMES = 3;
+// The beetle sheet also has transparent pixels beneath its feet. Lower only
+// the artwork so its paws share Kuro's roof line without changing collisions.
+const BEETLE_VISUAL_Y_OFFSET = -2;
 // The sprite includes a few transparent pixels below Kuro's paws. Lower only
 // the artwork so the physics stay unchanged while the paws meet the roof lip.
 const CAT_VISUAL_Y_OFFSET = 6;
@@ -310,7 +313,7 @@ export default function RooftopAdventureGame() {
           const fallRotation = defeated ? Math.min(42, Math.max(0, (defeatAge - 0.34) * 70)) : 0;
           return <View key={obstacle.id} testID={obstacle.id} style={[styles.beetleFrame, {
             left: obstacle.x - 6,
-            top: obstacle.y - 10,
+            top: obstacle.y + BEETLE_VISUAL_Y_OFFSET,
             transform: [{ rotate: `${fallRotation}deg` }],
           }]}><Image source={defeated ? BEETLE_DEFEATED_SHEET : BEETLE_SHEET} resizeMode="stretch" style={[PIXELS, styles.beetleSheet, {
             width: BEETLE_FRAME * (defeated ? BEETLE_DEFEATED_FRAMES : 4),
